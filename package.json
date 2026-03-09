@@ -1,0 +1,16 @@
+{
+  "name": "math-viz",
+  "private": true,
+  "scripts": {
+    "playwright:install": "playwright install --with-deps chromium",
+    "test:e2e": "playwright test"
+  },
+  "dependencies": {
+    "@tailwindcss/cli": "^4.1.17",
+    "@tailwindcss/typography": "^0.5.16",
+    "katex": "^0.16.22"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.52.0"
+  }
+}
