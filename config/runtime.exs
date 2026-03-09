@@ -56,6 +56,9 @@ config :math_viz, :nvidia_nim,
   model: System.get_env("NVIDIA_NIM_MODEL", "moonshotai/kimi-k2-instruct"),
   timeout_ms: String.to_integer(System.get_env("NVIDIA_NIM_TIMEOUT_MS", "15000"))
 
+config :math_viz, :desmos_api_key,
+  System.get_env("DESMOS_API_KEY", Application.get_env(:math_viz, :desmos_api_key))
+
 # config/runtime.exs is executed for all environments, including
 # during releases. It is executed after compilation and before the
 # system starts, so it is typically used to load production configuration

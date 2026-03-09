@@ -45,6 +45,13 @@
   - forcing `PHX_SERVER=true`
   - fixing runtime port handling
 
+### Checkpoint 5
+
+- Replaced the card-heavy dashboard layout with a single-column document flow.
+- Moved engine metadata into a compact sticky `details` panel instead of giving it equal weight with the math.
+- Reduced empty graph space before verification by collapsing the graph surfaces until a verified payload exists.
+- Added a configurable Desmos API key path with the documented demo key as the default development fallback.
+
 ### Verification performed
 
 - `mix test`

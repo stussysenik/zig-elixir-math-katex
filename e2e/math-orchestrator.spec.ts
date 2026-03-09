@@ -15,6 +15,7 @@ test("toggles the Desmos layer without a full page reload", async ({ page }) => 
   await page.goto("/");
 
   await expect(page.getByTestId("desmos-surface")).toBeVisible();
+  await page.getByText("Engine", { exact: true }).click();
   await page.getByTestId("toggle-desmos").click();
   await expect(page.getByTestId("desmos-surface")).toHaveCount(0);
 });

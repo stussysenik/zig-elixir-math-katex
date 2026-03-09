@@ -61,12 +61,14 @@ Supported variables:
 - `NVIDIA_NIM_BASE_URL`
 - `NVIDIA_NIM_MODEL`
 - `NVIDIA_NIM_TIMEOUT_MS`
+- `DESMOS_API_KEY`
 
 Behavior:
 
 - `stub`: always uses the deterministic parser
 - `nim`: always uses NVIDIA NIM and errors if the key is missing
 - `dual`: tries NVIDIA NIM first, then falls back to the stub adapter
+- `DESMOS_API_KEY` defaults to Desmos' documented demo key for development
 
 ## Run
 

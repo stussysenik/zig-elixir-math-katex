@@ -7,7 +7,7 @@ defmodule MathVizWeb.MathOrchestratorLiveTest do
     {:ok, _view, html} = live(conn, ~p"/")
 
     assert html =~ "Verified-first mathematics over LiveView"
-    assert html =~ "MathOrchestratorLive"
+    assert html =~ "One prompt, one formal gate, three synchronized layers."
   end
 
   test "submitting a prompt updates the pipeline result", %{conn: conn} do

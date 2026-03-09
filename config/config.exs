@@ -11,7 +11,8 @@ config :math_viz,
   generators: [timestamp_type: :utc_datetime],
   nlp_mode: :stub,
   verifier: MathViz.Morphisms.Verifier.Mock,
-  graph_builder: MathViz.Morphisms.GraphBuilder.Default
+  graph_builder: MathViz.Morphisms.GraphBuilder.Default,
+  desmos_api_key: "dcb31709b452b1cf9dc26972add0fda6"
 
 # Configure the endpoint
 config :math_viz, MathVizWeb.Endpoint,

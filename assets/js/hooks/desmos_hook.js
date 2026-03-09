@@ -3,7 +3,7 @@ import { loadScriptOnce } from "./load_script"
 export const DesmosHook = {
   mounted() {
     this.handleEvent("desmos:update", ({graph}) => this.renderGraph(graph))
-    loadScriptOnce("desmos", "https://www.desmos.com/api/v1.11/calculator.js?apiKey=desmos")
+    loadScriptOnce("desmos", this.scriptUrl())
       .then(() => this.renderGraph(this.readGraph()))
       .catch(() => {
         this.el.innerHTML = "<div class=\"flex h-full items-center justify-center text-sm text-stone-500\">Desmos failed to load.</div>"
@@ -29,6 +29,14 @@ export const DesmosHook = {
     }
 
     return this.calculator
+  },
+
+  scriptUrl() {
+    const apiKey =
+      document.querySelector('meta[name="math-viz-desmos-api-key"]')?.getAttribute("content") ||
+      "dcb31709b452b1cf9dc26972add0fda6"
+
+    return `https://www.desmos.com/api/v1.11/calculator.js?apiKey=${apiKey}`
   },
 
   readGraph() {
