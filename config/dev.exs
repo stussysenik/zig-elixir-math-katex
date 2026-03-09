@@ -16,7 +16,15 @@ config :math_viz, MathVizWeb.Endpoint,
   secret_key_base: "m5vrB03f0UyqFVHF6qpdUtbiAGp3hWRC/+nparFoeAwseQB4Eh47NzpnEYFIqIob",
   watchers: [
     esbuild: {Esbuild, :install_and_run, [:math_viz, ~w(--sourcemap=inline --watch)]},
-    tailwind: {"bunx", ["@tailwindcss/cli", "-i", "assets/css/app.css", "-o", "priv/static/assets/css/app.css", "--watch"]}
+    bunx: [
+      "@tailwindcss/cli",
+      "-i",
+      "assets/css/app.css",
+      "-o",
+      "priv/static/assets/css/app.css",
+      "--watch",
+      cd: Path.expand("..", __DIR__)
+    ]
   ]
 
 # ## SSL Support
