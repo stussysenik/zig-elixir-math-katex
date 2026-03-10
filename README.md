@@ -6,6 +6,8 @@ The current app ships a greenfield Phoenix 1.8 LiveView surface with:
 
 - a shared CLI and web pipeline
 - a dual `N -> S` morphism (`stub` fallback plus NVIDIA NIM adapter)
+- strict AI, SymPy, and Desmos boundary contracts
+- a supervised Python SymPy Port worker
 - a mocked Lean-shaped verifier gate
 - KaTeX rendering
 - Desmos and GeoGebra layer hooks
@@ -19,8 +21,10 @@ The design goal is simple: do not render graph layers until verification passes.
 
 - `MathViz.Pipeline.run/2` is the single entrypoint for web and CLI flows.
 - `mix math.prove "derivative of sin(x)"` runs the same orchestration as the LiveView.
+- `MathViz.Contracts` validates the AI response shape, SymPy request/response, and the Desmos payload contract.
 - `MathViz.Morphisms.NlpRouter.Stub` handles deterministic local parsing.
-- `MathViz.Morphisms.NlpRouter.Nim` calls NVIDIA NIM with an OpenAI-compatible `chat/completions` request.
+- `MathViz.Morphisms.NlpRouter.Nim` calls NVIDIA NIM with an OpenAI-compatible `chat/completions` request and requests JSON-schema output first.
+- `MathViz.Engines.SymPyWorker` executes the symbolic step through a long-lived Python Port.
 - `MathViz.Morphisms.Verifier.Mock` simulates the Lean verification boundary and hard-gates graph rendering.
 - `MathViz.Morphisms.GraphBuilder.Default` produces Desmos and GeoGebra payloads from the verified symbolic state.
 
@@ -45,6 +49,8 @@ The design goal is simple: do not render graph layers until verification passes.
 ```bash
 mix setup
 ```
+
+`mix setup` creates a local `.venv`, installs `requirements.txt` into it, then builds the assets.
 
 ### Environment
 
@@ -110,6 +116,6 @@ bun run test:e2e
 ## Repo Notes
 
 - `PROGRESS.md` tracks the implementation checkpoints and verification steps.
-- `flake.nix` provides a reproducible shell for Elixir, Bun, Python, and `elan`.
-- The current verifier is intentionally mocked; the real Lean and SymPy bridges are next-phase integrations.
+- `flake.nix` provides a reproducible shell for Elixir, Bun, Python, SymPy, and `elan`.
+- The current verifier is intentionally mocked; Lean is still the next major integration.
 - Vision ingest, persistence, and exports are not in this version yet.

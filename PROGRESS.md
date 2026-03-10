@@ -52,16 +52,24 @@
 - Reduced empty graph space before verification by collapsing the graph surfaces until a verified payload exists.
 - Added a configurable Desmos API key path with the documented demo key as the default development fallback.
 
+### Checkpoint 6
+
+- Added `MathViz.Contracts` for the AI response, SymPy request/response, and Desmos payload boundaries.
+- Switched the pipeline to `N -> AI contract -> SymPy execution -> verifier -> graph payloads`.
+- Added a supervised Python SymPy Port worker and the `priv/python/sympy_runner.py` bridge.
+- Updated the Desmos hook to consume an `expressions` list via `push_event("update_graph", payload)`.
+- Added contract tests, SymPy worker tests, refreshed pipeline/LiveView assertions, and a new Playwright happy-path spec.
+- Updated project setup to create a local `.venv` and install SymPy there.
+
 ### Verification performed
 
 - `mix test`
 - `mix assets.build`
-- `mix math.prove "derivative of sin(x)"`
+- `mix math.prove "Graph the derivative of x^2"`
 - `bun run test:e2e`
 
 ### Open next slices
 
 - Replace the mock verifier with a real Lean worker boundary.
-- Add the SymPy/Python bridge.
 - Add notebook persistence and export formats.
 - Add vision ingestion and human-in-the-loop correction.
