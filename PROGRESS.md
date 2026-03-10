@@ -82,15 +82,27 @@
 - Added a drag-over hook so the command surface tints and gains a dashed ring when files hover over the window.
 - Kept engine diagnostics fully tucked behind the top-right trigger so the empty state still reads as a blank canvas.
 
+### Checkpoint 10
+
+- Added `ecto` embedded-schema validation for headless solve requests, vision payloads, and normalized solve responses.
+- Added the shared `MathViz.Solve` service so the API, LiveView, and CLI all use the same validated request path.
+- Added `POST /api/solve` with JSON and multipart support for text plus optional image uploads.
+- Switched the LiveView command bar from a cosmetic file input to native `allow_upload` and `live_file_input` handling.
+- Threaded optional vision bytes through the NIM adapter as OpenAI-compatible multimodal `content` parts.
+- Moved the default NIM model to `moonshotai/kimi-k2-5` so vision works out of the box when a key is present.
+- Ensured the app creates a writable local `tmp/` directory on boot so LiveView uploads work reliably in tests and dev.
+
 ### Verification performed
 
 - `mix test`
 - `mix assets.build`
 - `mix math.prove "Graph the derivative of x^2"`
 - `bun run test:e2e`
+- `curl -sS -X POST http://127.0.0.1:4000/api/solve -H 'content-type: application/json' -d '{"query":"Graph the derivative of x^2"}'`
+- `curl -sS -X POST http://127.0.0.1:4000/api/solve -F 'query=' -F 'image=@/tmp/mathviz-upload.png;type=image/png'`
 
 ### Open next slices
 
 - Replace the mock verifier with a real Lean worker boundary.
 - Add notebook persistence and export formats.
-- Add vision ingestion and human-in-the-loop correction.
+- Add human-in-the-loop OCR correction for ambiguous vision parses.
