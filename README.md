@@ -2,11 +2,20 @@
 
 Verified-first math orchestration built on Phoenix LiveView.
 
+Computation prompts run through the symbolic pipeline and only unlock graph layers after verification. Theory prompts return a direct text response and skip SymPy, proof, and graph rendering.
+
+## Screenshots
+
+| Verified solve | Theory response |
+| --- | --- |
+| ![Verified solve](docs/screenshots/verified-solve.png) | ![Theory response](docs/screenshots/theory-chat.png) |
+
 The current app ships a greenfield Phoenix 1.8 LiveView surface with:
 
 - a headless-first `/api/solve` endpoint for `curl`, uploads, and JSON clients
 - a shared CLI and web pipeline
 - a dual `N -> S` morphism (`stub` fallback plus NVIDIA NIM adapter)
+- a mode-aware response contract for computation vs theory prompts
 - strict AI, SymPy, and Desmos boundary contracts
 - Ecto embedded-schema validation for headless request/response payloads
 - a supervised Python SymPy Port worker
@@ -34,6 +43,7 @@ The design goal is simple: do not render graph layers until verification passes.
 ### Web UI
 
 - `MathOrchestratorLive` owns the pipeline state, conditional output rendering, and graph tab state.
+- Theory prompts render as text-only responses and leave the graph canvas empty.
 - KaTeX output is rendered via a LiveView hook.
 - Desmos and GeoGebra are loaded lazily from the browser and only receive payloads after verification succeeds.
 - The default web shell is intentionally sparse: a blank canvas, a bottom command bar, and output that appears only when data exists.
@@ -46,11 +56,11 @@ The design goal is simple: do not render graph layers until verification passes.
   - `application/json` with `query`, optional `image_base64`, optional `image_mime`
   - `multipart/form-data` with `query` and optional `image`
 - It returns one normalized JSON payload with:
+  - `mode` (`computation` or `chat`)
   - request metadata
   - adapter used
-  - verified symbolic output
-  - proof state
-  - graph payloads
+  - `chat_reply` plus `chat_steps` for theory prompts
+  - symbolic output, proof state, and graph payloads for computation prompts
   - timings
 
 ## Setup
@@ -161,6 +171,7 @@ bun run test:e2e
 Use these as original, engineering-math-style prompts for quick verification:
 
 - `Graph the derivative of x^2`
+- `What is an integral?`
 - `Find the Laplace transform of e^(2x) sin(x)`
 - `Solve the first-order ODE y' + 3y = 6`
 - `Expand the Fourier series of x on [-pi, pi]`
