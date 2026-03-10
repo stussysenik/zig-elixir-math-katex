@@ -10,7 +10,6 @@ defmodule MathVizWeb.MathOrchestratorLiveTest do
     assert has_element?(view, "#solve-form")
     assert has_element?(view, "[data-testid='query-input']")
     assert has_element?(view, "[data-testid='vision-upload-trigger']")
-    assert has_element?(view, "#vision-upload")
     assert html =~ "textbook photos and whiteboard sketches"
     refute html =~ "One prompt, one formal gate"
     refute has_element?(view, "#katex-output")
@@ -56,6 +55,31 @@ defmodule MathVizWeb.MathOrchestratorLiveTest do
     refute has_element?(view, "#desmos-surface")
   end
 
+  test "image upload runs through the native LiveView pipeline", %{conn: conn} do
+    {:ok, view, _html} = live(conn, ~p"/")
+
+    upload =
+      file_input(view, "#solve-form", :vision_input, [
+        %{
+          name: "whiteboard.png",
+          content: png_fixture(),
+          type: "image/png"
+        }
+      ])
+
+    render_upload(upload, "whiteboard.png")
+    assert render(view) =~ "Selected image: whiteboard.png"
+
+    view
+    |> element("#solve-form")
+    |> render_submit(%{"prompt" => %{"input_query" => ""}})
+
+    rendered = wait_for_render(view, "Proof complete")
+    assert has_element?(view, "#katex-output")
+    assert has_element?(view, "#desmos-surface")
+    assert rendered =~ "Pending verification" or rendered =~ "Analyze the uploaded image"
+  end
+
   defp wait_for_render(view, needle, attempts \\ 20)
 
   defp wait_for_render(view, needle, attempts) when attempts > 0 do
@@ -70,4 +94,10 @@ defmodule MathVizWeb.MathOrchestratorLiveTest do
   end
 
   defp wait_for_render(view, _needle, 0), do: render(view)
+
+  defp png_fixture do
+    Base.decode64!(
+      "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4////fwAJ+wP+X2VINQAAAABJRU5ErkJggg=="
+    )
+  end
 end

@@ -1,39 +1,62 @@
 defmodule MathVizWeb.MathOrchestratorLive do
   use MathVizWeb, :live_view
 
-  alias MathViz.Pipeline
+  alias MathViz.API.VisionInput
+  alias MathViz.Solve
 
   @graph_engines [:desmos, :geogebra]
 
   @impl true
   def mount(_params, _session, socket) do
-    {:ok, assign(socket, default_assigns())}
+    socket =
+      socket
+      |> allow_upload(:vision_input,
+        accept: ~w(.jpg .jpeg .png .webp),
+        auto_upload: true,
+        max_entries: 1,
+        max_file_size: VisionInput.max_size()
+      )
+      |> assign(default_assigns())
+
+    {:ok, socket}
   end
 
   @impl true
   def handle_event("solve", %{"prompt" => %{"input_query" => raw_query}}, socket) do
     query = String.trim(raw_query)
+    has_upload? = socket.assigns.uploads.vision_input.entries != []
+    upload_error = upload_error_message(socket.assigns.uploads.vision_input)
 
-    if query == "" do
-      {:noreply, put_flash(socket, :error, "Enter a math prompt to start the pipeline.")}
-    else
-      request_id = socket.assigns.request_id + 1
-      parent = self()
+    cond do
+      upload_error ->
+        {:noreply, put_flash(socket, :error, upload_error)}
 
-      task =
-        Task.Supervisor.async_nolink(MathViz.TaskSupervisor, fn ->
-          Pipeline.run(query,
-            notify: fn stage, payload ->
-              send(parent, {:pipeline_stage, request_id, stage, payload})
-            end
-          )
-        end)
+      query == "" and not has_upload? ->
+        {:noreply, put_flash(socket, :error, "Enter a math prompt or attach an image to start.")}
 
-      {:noreply,
-       socket
-       |> clear_flash()
-       |> assign(reset_assigns(raw_query, request_id, task.ref))}
+      true ->
+        vision = consume_vision_input(socket)
+        request_id = socket.assigns.request_id + 1
+        parent = self()
+
+        task =
+          Task.Supervisor.async_nolink(MathViz.TaskSupervisor, fn ->
+            Solve.run(%{"query" => raw_query, "vision" => vision},
+              notify: fn stage, payload ->
+                send(parent, {:pipeline_stage, request_id, stage, payload})
+              end
+            )
+          end)
+
+        {:noreply,
+         socket
+         |> clear_flash()
+         |> assign(reset_assigns(raw_query, request_id, task.ref))}
     end
+  end
+
+  def handle_event("validate_upload", _params, socket) do
+    {:noreply, socket}
   end
 
   def handle_event("set_graph_engine", %{"engine" => engine_name}, socket) do
@@ -71,13 +94,13 @@ defmodule MathVizWeb.MathOrchestratorLive do
     {:noreply, maybe_assign_status(socket, request_id, socket.assigns.status)}
   end
 
-  def handle_info({ref, {:ok, result}}, %{assigns: %{current_task_ref: ref}} = socket) do
+  def handle_info({ref, {:ok, response}}, %{assigns: %{current_task_ref: ref}} = socket) do
     Process.demonitor(ref, [:flush])
 
     {:noreply,
      socket
      |> assign(current_task_ref: nil)
-     |> assign(result_assigns(result))
+     |> assign(response_assigns(response))
      |> maybe_push_graph_events()}
   end
 
@@ -107,7 +130,10 @@ defmodule MathVizWeb.MathOrchestratorLive do
     ~H"""
     <Layouts.app flash={@flash}>
       <main class="min-h-screen bg-white text-stone-950">
-        <section class="mx-auto flex min-h-screen max-w-3xl flex-col px-4 sm:px-6 lg:px-0">
+        <section
+          class="mx-auto flex min-h-screen max-w-3xl flex-col px-4 sm:px-6 lg:px-0"
+          phx-drop-target={@uploads.vision_input.ref}
+        >
           <header class="flex items-center justify-between py-4">
             <p class="text-[0.65rem] font-semibold uppercase tracking-[0.32em] text-stone-500">
               MathViz
@@ -292,6 +318,7 @@ defmodule MathVizWeb.MathOrchestratorLive do
                 for={@form}
                 id="solve-form"
                 phx-submit="solve"
+                phx-change="validate_upload"
                 phx-hook="VisionDropzoneHook"
                 class="mx-auto max-w-2xl rounded-[1.5rem] border border-stone-200 bg-white/95 p-3 shadow-lg shadow-stone-900/5 transition-colors"
               >
@@ -305,11 +332,10 @@ defmodule MathVizWeb.MathOrchestratorLive do
                     <.icon name="hero-paper-clip" class="size-4" />
                   </label>
 
-                  <input
-                    type="file"
-                    accept="image/jpeg,image/png,image/webp"
-                    class="hidden"
+                  <.live_file_input
+                    upload={@uploads.vision_input}
                     id="vision-upload"
+                    class="hidden"
                     data-testid="vision-upload"
                   />
 
@@ -338,7 +364,7 @@ defmodule MathVizWeb.MathOrchestratorLive do
                   class="mt-2 text-center text-xs text-stone-400"
                   data-testid="vision-file-label"
                 >
-                  Enter a query, or drag & drop textbook photos and whiteboard sketches (JPG/PNG/WebP, max 5MB).
+                  {vision_label(@uploads.vision_input)}
                 </p>
               </.form>
             </div>
@@ -384,36 +410,36 @@ defmodule MathVizWeb.MathOrchestratorLive do
     })
   end
 
-  defp result_assigns(result) do
-    graph_config = %{desmos: result.graph.desmos, geogebra: result.graph.geogebra}
+  defp response_assigns(response) do
+    graph = response.graph || %{}
+    symbol = response.symbol || %{}
+    proof = response.proof || %{}
+
+    graph_config = %{
+      desmos: Map.get(graph, :desmos, %{}),
+      geogebra: Map.get(graph, :geogebra, %{})
+    }
 
     %{
-      status: result.status,
-      is_verified: result.is_verified,
+      status: response_status(response.status),
+      is_verified: response.verified,
       sympy_ast: %{
-        statement: result.symbol.statement,
-        expression: result.symbol.expression,
-        source: result.adapter,
-        notes: result.symbol.notes
+        statement: Map.get(symbol, :statement),
+        expression: Map.get(symbol, :expression),
+        source: response.adapter,
+        notes: Map.get(symbol, :notes, [])
       },
-      lean_proof_state: result.proof.state,
-      proof_summary: result.proof.summary,
+      lean_proof_state: Map.get(proof, :state),
+      proof_summary: Map.get(proof, :summary),
       graph_config: graph_config,
-      output_latex: result.graph.latex_block || result.symbol.latex,
-      error_message: result_error(result),
-      adapter: result.adapter,
-      timings: result.timings,
+      output_latex: Map.get(graph, :latex_block) || Map.get(symbol, :latex, ""),
+      error_message: response.error,
+      adapter: response.adapter,
+      timings: response.timings || %{},
       desmos_json: Jason.encode!(Map.get(graph_config, :desmos, %{})),
       geogebra_json: Jason.encode!(Map.get(graph_config, :geogebra, %{}))
     }
   end
-
-  defp result_error(%{error: nil}), do: nil
-
-  defp result_error(%{error: :verification_failed}),
-    do: "Verification failed, so graph rendering remains gated."
-
-  defp result_error(%{error: error}), do: format_error(error)
 
   defp maybe_assign_status(socket, request_id, status)
        when request_id == socket.assigns.request_id do
@@ -470,6 +496,21 @@ defmodule MathVizWeb.MathOrchestratorLive do
     push_event(socket, event_name, %{graph: payload})
   end
 
+  defp consume_vision_input(socket) do
+    socket
+    |> consume_uploaded_entries(:vision_input, fn %{path: path}, entry ->
+      {:ok,
+       %{
+         bytes: File.read!(path),
+         mime:
+           entry.client_type || MIME.from_path(entry.client_name) || "application/octet-stream",
+         filename: entry.client_name,
+         size: entry.client_size
+       }}
+    end)
+    |> List.first()
+  end
+
   defp format_status(:idle), do: "Idle"
   defp format_status(:computing), do: "Computing"
   defp format_status(:verifying), do: "Verifying"
@@ -478,7 +519,21 @@ defmodule MathVizWeb.MathOrchestratorLive do
   defp format_status(other), do: other |> to_string() |> String.capitalize()
 
   defp format_error(reason) when is_binary(reason), do: reason
+  defp format_error(%Ecto.Changeset{} = changeset), do: upload_error_text(changeset)
   defp format_error(reason), do: inspect(reason)
+
+  defp response_status(status) when is_binary(status) do
+    case status do
+      "idle" -> :idle
+      "computing" -> :computing
+      "verifying" -> :verifying
+      "rendering" -> :rendering
+      "error" -> :error
+      _ -> :error
+    end
+  end
+
+  defp response_status(status) when is_atom(status), do: status
 
   defp normalize_graph_engine(engine) when is_binary(engine) do
     case engine do
@@ -515,6 +570,50 @@ defmodule MathVizWeb.MathOrchestratorLive do
   defp available_graph_engines(graph_config) do
     Enum.filter(@graph_engines, &has_graph_payload?(graph_config, &1))
   end
+
+  defp vision_label(upload) do
+    cond do
+      upload_error_message(upload) ->
+        upload_error_message(upload)
+
+      upload.entries != [] ->
+        entry = List.first(upload.entries)
+        "Selected image: #{entry.client_name}"
+
+      true ->
+        "Enter a query, or drag & drop textbook photos and whiteboard sketches (JPG/PNG/WebP, max 5MB)."
+    end
+  end
+
+  defp upload_error_message(upload) do
+    cond do
+      error = upload_errors(upload) |> List.first() ->
+        upload_error_text(error)
+
+      entry = Enum.find(upload.entries, &(upload_errors(upload, &1) != [])) ->
+        upload
+        |> upload_errors(entry)
+        |> List.first()
+        |> upload_error_text()
+
+      true ->
+        nil
+    end
+  end
+
+  defp upload_error_text(%Ecto.Changeset{} = changeset) do
+    changeset
+    |> Ecto.Changeset.traverse_errors(fn {message, _opts} -> message end)
+    |> Enum.reduce(nil, fn
+      {_field, [message | _]}, nil -> message
+      _, acc -> acc
+    end) || "request is invalid"
+  end
+
+  defp upload_error_text(:too_large), do: "Images must be 5MB or smaller."
+  defp upload_error_text(:not_accepted), do: "Only JPG, PNG, and WebP uploads are supported."
+  defp upload_error_text(other) when is_binary(other), do: other
+  defp upload_error_text(other), do: inspect(other)
 
   defp status_dot_classes(status, is_verified, error_message) do
     base = "inline-flex h-2.5 w-2.5 rounded-full"

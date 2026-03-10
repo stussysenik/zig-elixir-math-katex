@@ -53,7 +53,7 @@ config :math_viz, :nlp_mode, nlp_mode
 config :math_viz, :nvidia_nim,
   api_key: System.get_env("NVIDIA_NIM_API_KEY"),
   base_url: System.get_env("NVIDIA_NIM_BASE_URL", "https://integrate.api.nvidia.com/v1"),
-  model: System.get_env("NVIDIA_NIM_MODEL", "moonshotai/kimi-k2-instruct"),
+  model: System.get_env("NVIDIA_NIM_MODEL", "moonshotai/kimi-k2-5"),
   timeout_ms: String.to_integer(System.get_env("NVIDIA_NIM_TIMEOUT_MS", "15000"))
 
 config :math_viz,
@@ -78,7 +78,7 @@ config :math_viz,
 # script that automatically sets the env var above.
 default_port =
   case config_env() do
-    :test -> 4002
+    :test -> 4012
     :prod -> String.to_integer(System.get_env("PORT", "4000"))
     _ -> 4000
   end

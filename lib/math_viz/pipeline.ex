@@ -11,7 +11,7 @@ defmodule MathViz.Pipeline do
   @spec run(String.t(), keyword()) :: {:ok, Result.t()} | {:error, term()}
   def run(query_text, opts \\ []) when is_binary(query_text) do
     notify = Keyword.get(opts, :notify, fn _, _ -> :ok end)
-    query = Query.new(query_text)
+    query = Query.new(query_text, Keyword.get(opts, :query_metadata, %{}))
 
     with {:ok, ai_response, adapter, nlp_ms} <- route(query, opts, notify),
          {:ok, sympy_response, sympy_ms} <- execute_sympy(ai_response, opts),

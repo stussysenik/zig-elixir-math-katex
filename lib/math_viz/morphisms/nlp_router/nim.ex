@@ -11,6 +11,8 @@ defmodule MathViz.Morphisms.NlpRouter.Nim do
   You translate a natural-language math request into a strict JSON object for a verified-first symbolic pipeline.
   Return JSON only. No markdown. No prose outside the JSON object.
   Rules:
+  - If an image is present, transcribe the visible mathematics before choosing the symbolic form.
+  - If the image is ambiguous, say so in reasoning_steps and choose the most likely expression conservatively.
   - reasoning_steps: 1-4 short strings that describe the math transformation.
   - raw_latex: KaTeX-ready LaTeX for the intended result.
   - sympy_executable: a single SymPy-safe expression using diff, integrate, simplify, expand, factor, sin, cos, tan, exp, log, sqrt, x, y, or z.
@@ -46,7 +48,7 @@ defmodule MathViz.Morphisms.NlpRouter.Nim do
         },
         messages: [
           %{role: "system", content: @system_prompt},
-          %{role: "user", content: text}
+          %{role: "user", content: user_content(text, Keyword.get(opts, :vision))}
         ]
       }
 
@@ -110,6 +112,42 @@ defmodule MathViz.Morphisms.NlpRouter.Nim do
     case Regex.run(~r/\{.*\}/s, content) do
       [json] -> json
       _ -> content
+    end
+  end
+
+  defp user_content(text, nil), do: String.trim(text)
+
+  defp user_content(text, %{bytes: bytes, mime: mime})
+       when is_binary(bytes) and is_binary(mime) do
+    [
+      %{
+        type: "text",
+        text: build_vision_prompt(text)
+      },
+      %{
+        type: "image_url",
+        image_url: %{
+          url: "data:#{mime};base64,#{Base.encode64(bytes)}",
+          detail: "auto"
+        }
+      }
+    ]
+  end
+
+  defp user_content(text, _vision), do: String.trim(text)
+
+  defp build_vision_prompt(text) do
+    trimmed = String.trim(text)
+
+    if trimmed == "" do
+      "Use the uploaded image as the primary source. Extract the math problem and return the strict JSON contract."
+    else
+      """
+      Use the text request and the uploaded image together.
+      Text request: #{trimmed}
+      First transcribe the visible mathematics from the image, then return the strict JSON contract.
+      """
+      |> String.trim()
     end
   end
 end

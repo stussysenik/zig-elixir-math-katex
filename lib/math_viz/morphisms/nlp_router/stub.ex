@@ -7,11 +7,15 @@ defmodule MathViz.Morphisms.NlpRouter.Stub do
   alias MathViz.Core.Query
 
   @impl true
-  def to_contract(%Query{text: text}, _opts) do
+  def to_contract(%Query{text: text}, opts) do
     normalized = String.downcase(String.trim(text))
+    vision? = match?(%{bytes: bytes} when is_binary(bytes), Keyword.get(opts, :vision))
 
     contract =
       cond do
+        normalized == "" and vision? ->
+          image_contract()
+
         normalized == "" ->
           default_contract()
 
@@ -54,7 +58,7 @@ defmodule MathViz.Morphisms.NlpRouter.Stub do
           default_contract(text)
       end
 
-    {:ok, contract}
+    {:ok, maybe_annotate_vision(contract, vision?)}
   end
 
   defp explicit_expression?(text) do
@@ -134,9 +138,27 @@ defmodule MathViz.Morphisms.NlpRouter.Stub do
     |> maybe_annotate_default(text)
   end
 
+  defp image_contract do
+    %AIResponse{
+      reasoning_steps: [
+        "Vision input received in stub mode, so use a deterministic fallback.",
+        "Render a verified parabola to keep the upload loop testable offline."
+      ],
+      raw_latex: "x^2",
+      sympy_executable: "x^2",
+      desmos_expressions: [%DesmosExpression{id: "graph1", latex: "y=x^2"}]
+    }
+  end
+
   defp maybe_annotate_default(%AIResponse{} = contract, ""), do: contract
 
   defp maybe_annotate_default(%AIResponse{} = contract, text) do
     %{contract | reasoning_steps: ["Prompt: #{String.trim(text)}" | contract.reasoning_steps]}
+  end
+
+  defp maybe_annotate_vision(%AIResponse{} = contract, false), do: contract
+
+  defp maybe_annotate_vision(%AIResponse{} = contract, true) do
+    %{contract | reasoning_steps: ["Vision input attached." | contract.reasoning_steps]}
   end
 end

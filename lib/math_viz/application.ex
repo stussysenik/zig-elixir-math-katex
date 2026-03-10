@@ -7,6 +7,8 @@ defmodule MathViz.Application do
 
   @impl true
   def start(_type, _args) do
+    ensure_tmp_dir!()
+
     children = [
       MathVizWeb.Telemetry,
       {DNSCluster, query: Application.get_env(:math_viz, :dns_cluster_query) || :ignore},
@@ -29,5 +31,9 @@ defmodule MathViz.Application do
   def config_change(changed, _new, removed) do
     MathVizWeb.Endpoint.config_change(changed, removed)
     :ok
+  end
+
+  defp ensure_tmp_dir! do
+    File.mkdir_p!(Path.join(File.cwd!(), "tmp"))
   end
 end

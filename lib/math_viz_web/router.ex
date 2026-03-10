@@ -20,6 +20,12 @@ defmodule MathVizWeb.Router do
     live "/", MathOrchestratorLive
   end
 
+  scope "/api", MathVizWeb do
+    pipe_through :api
+
+    post "/solve", SolveController, :create
+  end
+
   # Other scopes may use custom stacks.
   # scope "/api", MathVizWeb do
   #   pipe_through :api

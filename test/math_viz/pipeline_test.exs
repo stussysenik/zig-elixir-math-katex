@@ -49,4 +49,23 @@ defmodule MathViz.PipelineTest do
     assert result.graph.desmos == %{}
     assert result.graph.geogebra == %{}
   end
+
+  test "stub mode stays deterministic when a vision payload is attached" do
+    assert {:ok, result} =
+             Pipeline.run("",
+               mode: :stub,
+               vision: %{
+                 bytes:
+                   Base.decode64!(
+                     "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4////fwAJ+wP+X2VINQAAAABJRU5ErkJggg=="
+                   ),
+                 mime: "image/png",
+                 filename: "whiteboard.png"
+               }
+             )
+
+    assert result.is_verified
+    assert result.graph.desmos.expressions |> hd() |> Map.get(:latex) == "y=x^2"
+    assert Enum.any?(result.symbol.notes, &String.contains?(&1, "Vision input attached"))
+  end
 end

@@ -17,30 +17,26 @@ defmodule Mix.Tasks.Math.Prove do
 
     notify = fn stage, _payload -> Mix.shell().info("-> #{stage}") end
 
-    case MathViz.Pipeline.run(query, notify: notify) do
-      {:ok, result} ->
-        ai_response = result.symbol.raw[:ai_response] || %{}
-        sympy_response = result.symbol.raw[:sympy_response] || %{}
+    case MathViz.Solve.run(%{"query" => query}, notify: notify) do
+      {:ok, response} ->
+        symbol = response.symbol || %{}
+        proof = response.proof || %{}
+        graph = response.graph || %{}
 
         Mix.shell().info("")
-        Mix.shell().info("Adapter: #{result.adapter}")
-        Mix.shell().info("Verified: #{result.is_verified}")
+        Mix.shell().info("Adapter: #{response.adapter}")
+        Mix.shell().info("Verified: #{response.verified}")
+        Mix.shell().info("Expression: #{Map.get(symbol, :expression, "n/a")}")
+        Mix.shell().info("LaTeX: #{Map.get(symbol, :latex, "n/a")}")
+        Mix.shell().info("Proof: #{Map.get(proof, :state, "n/a")}")
+        Mix.shell().info("Desmos: #{Jason.encode!(Map.get(graph, :desmos, %{}))}")
+        Mix.shell().info("GeoGebra: #{Jason.encode!(Map.get(graph, :geogebra, %{}))}")
+        Mix.shell().info("Timings: #{inspect(response.timings)}")
 
-        Mix.shell().info(
-          "Reasoning: #{Enum.join(Map.get(ai_response, :reasoning_steps, []), " | ")}"
+      {:error, %Ecto.Changeset{} = changeset} ->
+        Mix.raise(
+          "invalid request: #{inspect(Ecto.Changeset.traverse_errors(changeset, fn {message, _opts} -> message end))}"
         )
-
-        Mix.shell().info("SymPy executable: #{Map.get(ai_response, :sympy_executable, "n/a")}")
-
-        Mix.shell().info(
-          "SymPy result: #{Map.get(sympy_response, :result_string, result.symbol.expression)}"
-        )
-
-        Mix.shell().info("Expression: #{result.symbol.expression}")
-        Mix.shell().info("LaTeX: #{result.symbol.latex}")
-        Mix.shell().info("Proof: #{result.proof.state}")
-        Mix.shell().info("Desmos: #{Jason.encode!(result.graph.desmos)}")
-        Mix.shell().info("GeoGebra: #{Jason.encode!(result.graph.geogebra)}")
 
       {:error, reason} ->
         Mix.raise("pipeline failed: #{inspect(reason)}")
