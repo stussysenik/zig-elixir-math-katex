@@ -30,10 +30,10 @@ The design goal is simple: do not render graph layers until verification passes.
 
 ### Web UI
 
-- `MathOrchestratorLive` owns the pipeline state, toggles, and render gating.
+- `MathOrchestratorLive` owns the pipeline state, conditional output rendering, and graph tab state.
 - KaTeX output is rendered via a LiveView hook.
 - Desmos and GeoGebra are loaded lazily from the browser and only receive payloads after verification succeeds.
-- Layer toggles are server-driven, not client-owned React state.
+- The default web shell is intentionally sparse: a blank canvas, a bottom command bar, and output that appears only when data exists.
 
 ## Setup
 

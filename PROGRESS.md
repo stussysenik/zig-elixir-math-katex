@@ -68,6 +68,14 @@
 - Forced Desmos and GeoGebra surfaces to hold a stable `aspect-video` canvas with a `min-h-[400px]` floor so the hooks no longer collapse into slivers.
 - Added larger vertical spacing between the document blocks and tightened the LiveView test to wait for async pipeline completion instead of using a fixed sleep.
 
+### Checkpoint 8
+
+- Rebuilt the LiveView shell around a mobile-first blank canvas instead of a document hero.
+- Moved the query form into a sticky bottom command bar and removed explanatory copy from the default state.
+- Switched graph rendering from stacked sections to a single tabbed surface with `Desmos` selected by default.
+- Hid output, proof, and graph sections entirely until the pipeline actually has data to render.
+- Simplified the graph hooks so they fall back to quiet visual shells instead of helper text while loading.
+
 ### Verification performed
 
 - `mix test`
