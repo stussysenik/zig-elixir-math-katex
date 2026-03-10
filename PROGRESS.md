@@ -61,6 +61,13 @@
 - Added contract tests, SymPy worker tests, refreshed pipeline/LiveView assertions, and a new Playwright happy-path spec.
 - Updated project setup to create a local `.venv` and install SymPy there.
 
+### Checkpoint 7
+
+- Reworked the input form so the textarea reads as a real writing surface instead of inline document text.
+- Promoted the submit action into a proper primary button with clear visual weight.
+- Forced Desmos and GeoGebra surfaces to hold a stable `aspect-video` canvas with a `min-h-[400px]` floor so the hooks no longer collapse into slivers.
+- Added larger vertical spacing between the document blocks and tightened the LiveView test to wait for async pipeline completion instead of using a fixed sleep.
+
 ### Verification performed
 
 - `mix test`

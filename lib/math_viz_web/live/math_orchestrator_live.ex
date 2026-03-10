@@ -197,154 +197,148 @@ defmodule MathVizWeb.MathOrchestratorLive do
             </div>
           </header>
 
-          <section class="mb-16">
-            <p class="text-[0.65rem] font-semibold uppercase tracking-[0.35em] text-stone-500">
-              Natural language input
-            </p>
-            <h1 class="mt-3 font-serif text-5xl leading-[1.02] tracking-tight text-balance text-stone-900 sm:text-6xl">
-              One prompt, one formal gate, three synchronized layers.
-            </h1>
-            <p class="mt-5 max-w-2xl text-base leading-8 text-stone-600">
-              Phoenix coordinates the natural-language morphism, the verifier boundary, and the graph payloads. The user should mostly see beautiful math, not the machinery.
-            </p>
-
-            <.form for={@form} id="solve-form" phx-submit="solve" class="mt-10">
-              <.input
-                field={@form[:input_query]}
-                type="textarea"
-                label="Prompt"
-                rows="4"
-                class="w-full border-0 border-b border-stone-300 bg-transparent px-0 pb-4 pt-0 font-serif text-2xl leading-10 text-stone-900 shadow-none outline-none ring-0 placeholder:text-stone-400 focus:border-stone-900 focus:ring-0"
-                placeholder="Prove the derivative of sin(x), then show the verified graph."
-                data-testid="query-input"
-              />
-              <div class="mt-5 flex flex-wrap items-center gap-4">
-                <button
-                  type="submit"
-                  class="font-mono text-xs font-semibold uppercase tracking-[0.28em] text-stone-900 transition hover:text-stone-600"
-                  phx-disable-with="Translating..."
-                  data-testid="submit-query"
-                >
-                  Run verified pipeline
-                </button>
-                <p class="text-sm text-stone-500">
-                  `.env.local` switches to NVIDIA NIM automatically when a key is present.
-                </p>
-              </div>
-            </.form>
-          </section>
-
-          <section class="prose prose-stone prose-lg max-w-none">
-            <p class="not-prose text-[0.65rem] font-semibold uppercase tracking-[0.35em] text-stone-500">
-              Verified output
-            </p>
-
-            <div
-              id="katex-output"
-              phx-hook="MathRender"
-              phx-update="ignore"
-              data-testid="katex-output"
-              data-latex={@output_latex}
-              class="min-h-16 py-4"
-            >
-            </div>
-
-            <%= if @sympy_ast do %>
-              <div class="not-prose mt-6 border-l border-stone-200 pl-5">
-                <p class="font-serif text-2xl text-stone-900">{@sympy_ast.statement}</p>
-                <p class="mt-3 font-mono text-sm text-stone-600">{@sympy_ast.expression}</p>
-
-                <%= if @sympy_ast.notes != [] do %>
-                  <ul class="mt-4 space-y-2 text-sm leading-6 text-stone-500">
-                    <%= for note <- @sympy_ast.notes do %>
-                      <li>{note}</li>
-                    <% end %>
-                  </ul>
-                <% end %>
-              </div>
-            <% end %>
-
-            <%= if @error_message do %>
-              <p class="not-prose mt-6 text-sm leading-6 text-rose-700">
-                {@error_message}
+          <div class="space-y-16">
+            <section>
+              <p class="text-[0.65rem] font-semibold uppercase tracking-[0.35em] text-stone-500">
+                Natural language input
               </p>
-            <% end %>
-          </section>
+              <h1 class="mt-3 font-serif text-5xl leading-[1.02] tracking-tight text-balance text-stone-900 sm:text-6xl">
+                One prompt, one formal gate, three synchronized layers.
+              </h1>
+              <p class="mt-5 max-w-2xl text-base leading-8 text-stone-600">
+                Phoenix coordinates the natural-language morphism, the verifier boundary, and the graph payloads. The user should mostly see beautiful math, not the machinery.
+              </p>
 
-          <%= if @layers.lean_proof do %>
-            <section class="mt-16">
-              <div class="mb-3 flex items-center justify-between gap-4">
-                <p class="text-[0.65rem] font-semibold uppercase tracking-[0.35em] text-stone-500">
-                  Proof boundary
+              <.form for={@form} id="solve-form" phx-submit="solve" class="mt-10 space-y-5">
+                <.input
+                  field={@form[:input_query]}
+                  type="textarea"
+                  label="Prompt"
+                  rows="5"
+                  class="w-full min-h-[120px] resize-y rounded-lg border border-gray-300 p-4 text-lg text-stone-900 shadow-sm focus:border-slate-500 focus:ring-slate-500"
+                  placeholder="Prove the derivative of sin(x), then show the verified graph."
+                  data-testid="query-input"
+                />
+                <div class="flex flex-col gap-3 sm:flex-row sm:items-center">
+                  <button
+                    type="submit"
+                    class="inline-flex w-full items-center justify-center rounded-md border border-transparent bg-slate-900 px-6 py-3 text-base font-medium text-white transition-colors hover:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-slate-900 focus:ring-offset-2 sm:w-auto"
+                    phx-disable-with="Translating..."
+                    data-testid="submit-query"
+                  >
+                    Run verified pipeline
+                  </button>
+                  <p class="text-sm text-stone-500">
+                    `.env.local` switches to NVIDIA NIM automatically when a key is present.
+                  </p>
+                </div>
+              </.form>
+            </section>
+
+            <section class="prose prose-stone prose-lg max-w-none">
+              <p class="not-prose text-[0.65rem] font-semibold uppercase tracking-[0.35em] text-stone-500">
+                Verified output
+              </p>
+
+              <div
+                id="katex-output"
+                phx-hook="MathRender"
+                phx-update="ignore"
+                data-testid="katex-output"
+                data-latex={@output_latex}
+                class="min-h-16 py-4"
+              >
+              </div>
+
+              <%= if @sympy_ast do %>
+                <div class="not-prose mt-6 border-l border-stone-200 pl-5">
+                  <p class="font-serif text-2xl text-stone-900">{@sympy_ast.statement}</p>
+                  <p class="mt-3 font-mono text-sm text-stone-600">{@sympy_ast.expression}</p>
+
+                  <%= if @sympy_ast.notes != [] do %>
+                    <ul class="mt-4 space-y-2 text-sm leading-6 text-stone-500">
+                      <%= for note <- @sympy_ast.notes do %>
+                        <li>{note}</li>
+                      <% end %>
+                    </ul>
+                  <% end %>
+                </div>
+              <% end %>
+
+              <%= if @error_message do %>
+                <p class="not-prose mt-6 text-sm leading-6 text-rose-700">
+                  {@error_message}
                 </p>
-                <span class="font-mono text-[0.7rem] uppercase tracking-[0.24em] text-stone-500">
-                  {@lean_proof_state || "Idle"}
-                </span>
-              </div>
-              <pre
-                class="overflow-x-auto border-l border-stone-200 pl-5 font-mono text-xs leading-7 text-stone-600"
-                data-testid="proof-state"
-              ><%= @proof_summary %></pre>
+              <% end %>
             </section>
-          <% end %>
 
-          <%= if @layers.desmos do %>
-            <section class="mt-20">
-              <div class="mb-5 flex items-center justify-between gap-4">
-                <div>
+            <%= if @layers.lean_proof do %>
+              <section>
+                <div class="mb-3 flex items-center justify-between gap-4">
                   <p class="text-[0.65rem] font-semibold uppercase tracking-[0.35em] text-stone-500">
-                    Graph layer
+                    Proof boundary
                   </p>
-                  <h2 class="mt-2 font-serif text-3xl text-stone-900">Desmos</h2>
+                  <span class="font-mono text-[0.7rem] uppercase tracking-[0.24em] text-stone-500">
+                    {@lean_proof_state || "Idle"}
+                  </span>
                 </div>
-                <span class="font-mono text-[0.7rem] uppercase tracking-[0.24em] text-stone-500">
-                  {if @is_verified, do: "live", else: "blocked"}
-                </span>
-              </div>
-              <div
-                id="desmos-surface"
-                phx-hook="DesmosHook"
-                phx-update="ignore"
-                data-testid="desmos-surface"
-                data-config={@desmos_json}
-                class={[
-                  "w-full overflow-hidden border-b border-stone-200 transition-[height] duration-300",
-                  @is_verified && "h-[26rem]",
-                  !@is_verified && "h-12"
-                ]}
-              >
-              </div>
-            </section>
-          <% end %>
+                <pre
+                  class="overflow-x-auto border-l border-stone-200 pl-5 font-mono text-xs leading-7 text-stone-600"
+                  data-testid="proof-state"
+                ><%= @proof_summary %></pre>
+              </section>
+            <% end %>
 
-          <%= if @layers.geogebra do %>
-            <section class="mt-20">
-              <div class="mb-5 flex items-center justify-between gap-4">
-                <div>
-                  <p class="text-[0.65rem] font-semibold uppercase tracking-[0.35em] text-stone-500">
-                    Graph layer
-                  </p>
-                  <h2 class="mt-2 font-serif text-3xl text-stone-900">GeoGebra</h2>
+            <%= if @layers.desmos do %>
+              <section>
+                <div class="mb-5 flex items-center justify-between gap-4">
+                  <div>
+                    <p class="text-[0.65rem] font-semibold uppercase tracking-[0.35em] text-stone-500">
+                      Graph layer
+                    </p>
+                    <h2 class="mt-2 font-serif text-3xl text-stone-900">Desmos</h2>
+                  </div>
+                  <span class="font-mono text-[0.7rem] uppercase tracking-[0.24em] text-stone-500">
+                    {if @is_verified, do: "live", else: "blocked"}
+                  </span>
                 </div>
-                <span class="font-mono text-[0.7rem] uppercase tracking-[0.24em] text-stone-500">
-                  v1
-                </span>
-              </div>
-              <div
-                id="geogebra-surface"
-                phx-hook="GeoGebraHook"
-                phx-update="ignore"
-                data-testid="geogebra-surface"
-                data-config={@geogebra_json}
-                class={[
-                  "w-full overflow-hidden border-b border-stone-200 transition-[height] duration-300",
-                  @is_verified && "h-[26rem]",
-                  !@is_verified && "h-12"
-                ]}
-              >
-              </div>
-            </section>
-          <% end %>
+                <div
+                  id="desmos-surface"
+                  phx-hook="DesmosHook"
+                  phx-update="ignore"
+                  data-testid="desmos-surface"
+                  data-config={@desmos_json}
+                  class="w-full aspect-video min-h-[400px] overflow-hidden rounded-xl border border-gray-200 bg-gray-50 shadow-inner"
+                >
+                </div>
+              </section>
+            <% end %>
+
+            <%= if @layers.geogebra do %>
+              <section>
+                <div class="mb-5 flex items-center justify-between gap-4">
+                  <div>
+                    <p class="text-[0.65rem] font-semibold uppercase tracking-[0.35em] text-stone-500">
+                      Graph layer
+                    </p>
+                    <h2 class="mt-2 font-serif text-3xl text-stone-900">GeoGebra</h2>
+                  </div>
+                  <span class="font-mono text-[0.7rem] uppercase tracking-[0.24em] text-stone-500">
+                    v1
+                  </span>
+                </div>
+                <div
+                  id="geogebra-surface"
+                  phx-hook="GeoGebraHook"
+                  phx-update="ignore"
+                  data-testid="geogebra-surface"
+                  data-config={@geogebra_json}
+                  class="w-full aspect-video min-h-[400px] overflow-hidden rounded-xl border border-gray-200 bg-gray-50 shadow-inner"
+                >
+                </div>
+              </section>
+            <% end %>
+          </div>
         </section>
       </main>
     </Layouts.app>

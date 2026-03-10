@@ -20,9 +20,7 @@ defmodule MathVizWeb.MathOrchestratorLiveTest do
 
     assert html =~ "Computing"
 
-    Process.sleep(100)
-
-    rendered = render(view)
+    rendered = wait_for_render(view, "Proof complete")
     assert rendered =~ "Proof complete"
     assert rendered =~ "2*x"
     assert rendered =~ "Graph the derivative of x^2"
@@ -39,4 +37,19 @@ defmodule MathVizWeb.MathOrchestratorLiveTest do
 
     refute has_element?(view, "#desmos-surface")
   end
+
+  defp wait_for_render(view, needle, attempts \\ 20)
+
+  defp wait_for_render(view, needle, attempts) when attempts > 0 do
+    rendered = render(view)
+
+    if rendered =~ needle do
+      rendered
+    else
+      Process.sleep(25)
+      wait_for_render(view, needle, attempts - 1)
+    end
+  end
+
+  defp wait_for_render(view, _needle, 0), do: render(view)
 end
