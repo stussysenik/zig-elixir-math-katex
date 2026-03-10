@@ -23,11 +23,27 @@ defmodule MathViz.PipelineTest do
     assert {:ok, result} = Pipeline.run("Graph the derivative of x^2", mode: :stub)
 
     assert result.is_verified
+    assert result.mode == :computation
     assert result.symbol.expression == "2*x"
     assert result.proof.state == "Proof complete"
     assert result.graph.desmos.expressions |> hd() |> Map.get(:latex) == "y=2*x"
     assert result.graph.geogebra.command == "f(x)=2*x"
     assert is_integer(result.timings.sympy_ms)
+  end
+
+  test "stub mode routes theory prompts to chat without graph rendering" do
+    assert {:ok, result} = Pipeline.run("What is an integral?", mode: :stub)
+
+    assert result.mode == :chat
+    assert result.chat_reply =~ "integral"
+    refute result.is_verified
+    assert result.symbol == nil
+    assert result.proof == nil
+    assert result.graph.desmos == %{}
+    assert result.graph.geogebra == %{}
+    assert result.timings.sympy_ms == 0
+    assert result.timings.verify_ms == 0
+    assert result.timings.graph_ms == 0
   end
 
   test "dual mode falls back to the stub when NIM is unavailable" do
@@ -65,6 +81,7 @@ defmodule MathViz.PipelineTest do
              )
 
     assert result.is_verified
+    assert result.mode == :computation
     assert result.graph.desmos.expressions |> hd() |> Map.get(:latex) == "y=x^2"
     assert Enum.any?(result.symbol.notes, &String.contains?(&1, "Vision input attached"))
   end

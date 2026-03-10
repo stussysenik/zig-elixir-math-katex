@@ -32,3 +32,17 @@ test("runs the verified pipeline and switches graph tabs", async ({ page }) => {
   await expect(page.getByTestId("geogebra-surface")).toBeVisible();
   await expect(page.locator("#desmos-surface")).toHaveCount(0);
 });
+
+test("routes theory prompts to chat output without graph rendering", async ({ page }) => {
+  await page.goto("/");
+
+  await page.getByTestId("query-input").fill("What is an integral?");
+  await page.getByTestId("submit-query").click();
+
+  await expect(page.getByTestId("chat-output")).toBeVisible();
+  await expect(page.getByTestId("chat-output")).toContainText("integral");
+  await expect(page.locator("#katex-output")).toHaveCount(0);
+  await expect(page.locator("#desmos-surface")).toHaveCount(0);
+  await expect(page.locator("#geogebra-surface")).toHaveCount(0);
+  await expect(page.getByTestId("graph-tabs")).toHaveCount(0);
+});

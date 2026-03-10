@@ -13,8 +13,36 @@ defmodule MathViz.Pipeline do
     notify = Keyword.get(opts, :notify, fn _, _ -> :ok end)
     query = Query.new(query_text, Keyword.get(opts, :query_metadata, %{}))
 
-    with {:ok, ai_response, adapter, nlp_ms} <- route(query, opts, notify),
-         {:ok, sympy_response, sympy_ms} <- execute_sympy(ai_response, opts),
+    with {:ok, ai_response, adapter, nlp_ms} <- route(query, opts, notify) do
+      case ai_response.mode do
+        :chat ->
+          result =
+            %Result{
+              query: query,
+              mode: :chat,
+              chat_reply: ai_response.chat_reply,
+              chat_steps: ai_response.reasoning_steps,
+              graph: %Graph{},
+              is_verified: false,
+              status: :complete,
+              timings: %{nlp_ms: nlp_ms, sympy_ms: 0, verify_ms: 0, graph_ms: 0},
+              adapter: adapter
+            }
+
+          notify.(:complete, %{result: result})
+          {:ok, result}
+
+        :computation ->
+          run_computation(query, ai_response, adapter, nlp_ms, opts, notify)
+      end
+    else
+      {:error, _} = error ->
+        error
+    end
+  end
+
+  defp run_computation(query, ai_response, adapter, nlp_ms, opts, notify) do
+    with {:ok, sympy_response, sympy_ms} <- execute_sympy(ai_response, opts),
          {:ok, symbol} <- build_symbol(query, ai_response, sympy_response, adapter),
          {:ok, proof, verify_ms} <- verify(symbol, opts, notify) do
       case proof.verified do
@@ -27,6 +55,7 @@ defmodule MathViz.Pipeline do
                 proof: proof,
                 graph: graph,
                 is_verified: true,
+                mode: :computation,
                 status: :rendering,
                 timings: %{
                   nlp_ms: nlp_ms,
@@ -49,6 +78,7 @@ defmodule MathViz.Pipeline do
               proof: proof,
               graph: %Graph{latex_block: symbol.latex},
               is_verified: false,
+              mode: :computation,
               status: :error,
               timings: %{nlp_ms: nlp_ms, sympy_ms: sympy_ms, verify_ms: verify_ms, graph_ms: 0},
               adapter: adapter,
@@ -58,9 +88,6 @@ defmodule MathViz.Pipeline do
           notify.(:complete, %{result: result})
           {:ok, result}
       end
-    else
-      {:error, _} = error ->
-        error
     end
   end
 

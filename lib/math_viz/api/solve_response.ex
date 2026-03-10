@@ -11,10 +11,13 @@ defmodule MathViz.API.SolveResponse do
   @primary_key false
   embedded_schema do
     field(:request_id, :string)
+    field(:mode, :string)
     field(:status, :string)
     field(:adapter, :string)
     field(:verified, :boolean)
     field(:error, :string)
+    field(:chat_reply, :string)
+    field(:chat_steps, {:array, :string}, default: [])
     field(:request, :map, default: %{})
     field(:symbol, :map, default: %{})
     field(:proof, :map, default: %{})
@@ -24,10 +27,13 @@ defmodule MathViz.API.SolveResponse do
 
   @type t :: %__MODULE__{
           request_id: String.t() | nil,
+          mode: String.t() | nil,
           status: String.t() | nil,
           adapter: String.t() | nil,
           verified: boolean(),
           error: String.t() | nil,
+          chat_reply: String.t() | nil,
+          chat_steps: [String.t()],
           request: map(),
           symbol: map(),
           proof: map(),
@@ -39,10 +45,13 @@ defmodule MathViz.API.SolveResponse do
   def new(%SolveRequest{} = request, %Result{} = result) do
     attrs = %{
       request_id: result.query && result.query.id,
+      mode: to_string(result.mode),
       status: to_string(result.status),
       adapter: to_string(result.adapter),
       verified: result.is_verified,
       error: format_error(result.error),
+      chat_reply: result.chat_reply,
+      chat_steps: result.chat_steps,
       request: %{
         query: request.query,
         effective_query: SolveRequest.effective_query(request),
@@ -100,10 +109,13 @@ defmodule MathViz.API.SolveResponse do
   def to_map(%__MODULE__{} = response) do
     %{
       request_id: response.request_id,
+      mode: response.mode,
       status: response.status,
       adapter: response.adapter,
       verified: response.verified,
       error: response.error,
+      chat_reply: response.chat_reply,
+      chat_steps: response.chat_steps,
       request: response.request,
       symbol: response.symbol,
       proof: response.proof,
@@ -116,10 +128,13 @@ defmodule MathViz.API.SolveResponse do
     response
     |> cast(attrs, [
       :request_id,
+      :mode,
       :status,
       :adapter,
       :verified,
       :error,
+      :chat_reply,
+      :chat_steps,
       :request,
       :symbol,
       :proof,
@@ -130,6 +145,7 @@ defmodule MathViz.API.SolveResponse do
       :status,
       :adapter,
       :verified,
+      :mode,
       :request,
       :symbol,
       :proof,

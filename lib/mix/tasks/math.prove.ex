@@ -25,7 +25,9 @@ defmodule Mix.Tasks.Math.Prove do
 
         Mix.shell().info("")
         Mix.shell().info("Adapter: #{response.adapter}")
+        Mix.shell().info("Mode: #{response.mode}")
         Mix.shell().info("Verified: #{response.verified}")
+        Mix.shell().info("Chat reply: #{response.chat_reply || "n/a"}")
         Mix.shell().info("Expression: #{Map.get(symbol, :expression, "n/a")}")
         Mix.shell().info("LaTeX: #{Map.get(symbol, :latex, "n/a")}")
         Mix.shell().info("Proof: #{Map.get(proof, :state, "n/a")}")

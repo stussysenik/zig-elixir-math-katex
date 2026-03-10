@@ -16,9 +16,11 @@ defmodule MathViz.Contracts do
   @ai_schema %{
     type: "object",
     properties: %{
+      mode: %{type: "string", enum: ["computation", "chat"]},
       reasoning_steps: %{type: "array", items: %{type: "string"}},
       raw_latex: %{type: "string"},
       sympy_executable: %{type: "string"},
+      chat_reply: %{type: "string"},
       desmos_expressions: %{
         type: "array",
         items: %{
@@ -32,7 +34,17 @@ defmodule MathViz.Contracts do
         }
       }
     },
-    required: ["reasoning_steps", "raw_latex", "sympy_executable", "desmos_expressions"],
+    required: ["mode", "reasoning_steps"],
+    oneOf: [
+      %{
+        properties: %{mode: %{enum: ["computation"]}},
+        required: ["raw_latex", "sympy_executable", "desmos_expressions"]
+      },
+      %{
+        properties: %{mode: %{enum: ["chat"]}},
+        required: ["chat_reply"]
+      }
+    ],
     additionalProperties: false
   }
 
@@ -41,17 +53,33 @@ defmodule MathViz.Contracts do
 
   @spec parse_ai_response(map()) :: {:ok, AIResponse.t()} | {:error, term()}
   def parse_ai_response(payload) when is_map(payload) do
-    with {:ok, reasoning_steps} <- fetch_string_list(payload, "reasoning_steps"),
-         {:ok, raw_latex} <- fetch_string(payload, "raw_latex"),
-         {:ok, sympy_executable} <- fetch_string(payload, "sympy_executable"),
-         {:ok, desmos_expressions} <- fetch_desmos_expressions(payload) do
-      {:ok,
-       %AIResponse{
-         reasoning_steps: reasoning_steps,
-         raw_latex: raw_latex,
-         sympy_executable: sympy_executable,
-         desmos_expressions: desmos_expressions
-       }}
+    with {:ok, mode} <- fetch_ai_response_mode(payload),
+         {:ok, reasoning_steps} <- fetch_string_list(payload, "reasoning_steps") do
+      case mode do
+        :computation ->
+          with {:ok, raw_latex} <- fetch_string(payload, "raw_latex"),
+               {:ok, sympy_executable} <- fetch_string(payload, "sympy_executable"),
+               {:ok, desmos_expressions} <- fetch_desmos_expressions(payload) do
+            {:ok,
+             %AIResponse{
+               mode: :computation,
+               reasoning_steps: reasoning_steps,
+               raw_latex: raw_latex,
+               sympy_executable: sympy_executable,
+               desmos_expressions: desmos_expressions
+             }}
+          end
+
+        :chat ->
+          with {:ok, chat_reply} <- fetch_string(payload, "chat_reply") do
+            {:ok,
+             %AIResponse{
+               mode: :chat,
+               reasoning_steps: reasoning_steps,
+               chat_reply: chat_reply
+             }}
+          end
+      end
     end
   end
 
@@ -88,7 +116,7 @@ defmodule MathViz.Contracts do
           {:ok, Symbol.t()} | {:error, term()}
   def to_symbol(
         %Query{} = query,
-        %AIResponse{} = ai_response,
+        %AIResponse{mode: :computation} = ai_response,
         %SymPyResponse{ok: true} = sympy_response
       ) do
     normalized_expression =
@@ -122,6 +150,9 @@ defmodule MathViz.Contracts do
        notes: ai_response.reasoning_steps
      }}
   end
+
+  def to_symbol(_query, %AIResponse{mode: :chat}, _sympy_response),
+    do: {:error, :chat_response_has_no_symbol}
 
   def to_symbol(_query, _ai_response, %SymPyResponse{error: error}),
     do: {:error, {:sympy_execution_failed, error}}
@@ -161,6 +192,14 @@ defmodule MathViz.Contracts do
   end
 
   defp parse_desmos_expression(_payload), do: {:error, :invalid_desmos_expression}
+
+  defp fetch_ai_response_mode(payload) do
+    case Map.get(payload, "mode") do
+      "computation" -> {:ok, :computation}
+      "chat" -> {:ok, :chat}
+      _ -> {:error, {:invalid_mode_field, "mode"}}
+    end
+  end
 
   defp fetch_string(payload, key) do
     case Map.get(payload, key) do
@@ -215,10 +254,12 @@ defmodule MathViz.Contracts do
 
   defp serialize_ai_response(%AIResponse{} = response) do
     %{
+      mode: response.mode,
       reasoning_steps: response.reasoning_steps,
       raw_latex: response.raw_latex,
       sympy_executable: response.sympy_executable,
-      desmos_expressions: Enum.map(response.desmos_expressions, &serialize_desmos_expression/1)
+      desmos_expressions: Enum.map(response.desmos_expressions, &serialize_desmos_expression/1),
+      chat_reply: response.chat_reply
     }
   end
 

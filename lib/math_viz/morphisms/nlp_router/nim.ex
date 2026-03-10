@@ -11,9 +11,14 @@ defmodule MathViz.Morphisms.NlpRouter.Nim do
   You translate a natural-language math request into a strict JSON object for a verified-first symbolic pipeline.
   Return JSON only. No markdown. No prose outside the JSON object.
   Rules:
+  - mode must be either "computation" or "chat".
+  - Use mode "chat" for conceptual, definitional, or explanatory questions that should be answered in prose.
+  - For mode "chat", include reasoning_steps and chat_reply only. Do not invent graph payloads or SymPy code.
+  - Use mode "computation" only when the request can be turned into a concrete symbolic computation.
   - If an image is present, transcribe the visible mathematics before choosing the symbolic form.
   - If the image is ambiguous, say so in reasoning_steps and choose the most likely expression conservatively.
   - reasoning_steps: 1-4 short strings that describe the math transformation.
+  - For mode "computation", include raw_latex, sympy_executable, and desmos_expressions.
   - raw_latex: KaTeX-ready LaTeX for the intended result.
   - sympy_executable: a single SymPy-safe expression using diff, integrate, simplify, expand, factor, sin, cos, tan, exp, log, sqrt, x, y, or z.
   - desmos_expressions: at least one object with id and latex. Use y=<expression> for graphable results.

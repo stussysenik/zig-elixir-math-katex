@@ -35,6 +35,23 @@ defmodule MathVizWeb.MathOrchestratorLiveTest do
     refute has_element?(view, "#geogebra-surface")
   end
 
+  test "theory prompts render chat output without graph surfaces", %{conn: conn} do
+    {:ok, view, _html} = live(conn, ~p"/")
+
+    view
+    |> element("#solve-form")
+    |> render_submit(%{"prompt" => %{"input_query" => "What is an integral?"}})
+
+    rendered = wait_for_render(view, "Theory")
+
+    assert rendered =~ "integral"
+    assert has_element?(view, "[data-testid='chat-output']")
+    refute has_element?(view, "#katex-output")
+    refute has_element?(view, "[data-testid='proof-state']")
+    refute has_element?(view, "#desmos-surface")
+    refute has_element?(view, "#geogebra-surface")
+  end
+
   test "graph tabs switch the rendered engine surface", %{conn: conn} do
     {:ok, view, _html} = live(conn, ~p"/")
 

@@ -191,16 +191,46 @@ defmodule MathVizWeb.MathOrchestratorLive do
 
           <div class="flex-1 pb-40 pt-6">
             <div class="space-y-12 sm:space-y-14">
-              <section :if={has_output?(@sympy_ast, @error_message)} class="space-y-5">
+              <section :if={has_output?(@sympy_ast, @chat_reply, @error_message)} class="space-y-5">
                 <div class="flex items-center gap-3">
                   <span
-                    class={status_dot_classes(@status, @is_verified, @error_message)}
+                    class={status_dot_classes(@status, @is_verified, @chat_reply, @error_message)}
                     data-testid="status-indicator"
                   >
                   </span>
                   <span data-testid="status-label" data-status={@status} class="sr-only">
                     {format_status(@status)}
                   </span>
+                </div>
+
+                <div
+                  :if={@chat_reply}
+                  class="space-y-4 rounded-[2rem] border border-stone-200 bg-stone-50/70 p-6"
+                  data-testid="chat-output"
+                >
+                  <div class="space-y-2">
+                    <p class="text-[0.65rem] font-semibold uppercase tracking-[0.28em] text-stone-400">
+                      Theory
+                    </p>
+                    <p class="font-serif text-2xl leading-tight text-stone-950">
+                      {@input_query}
+                    </p>
+                  </div>
+
+                  <div class="border-l border-stone-200 pl-4">
+                    <p class="whitespace-pre-line text-base leading-7 text-stone-700">
+                      {@chat_reply}
+                    </p>
+
+                    <ul
+                      :if={@chat_notes != []}
+                      class="mt-4 space-y-2 text-sm leading-6 text-stone-500"
+                    >
+                      <%= for note <- @chat_notes do %>
+                        <li>{note}</li>
+                      <% end %>
+                    </ul>
+                  </div>
                 </div>
 
                 <div :if={@sympy_ast} class="space-y-4">
@@ -378,9 +408,12 @@ defmodule MathVizWeb.MathOrchestratorLive do
   defp default_assigns do
     %{
       input_query: "",
+      response_mode: nil,
       status: :idle,
       is_verified: false,
       sympy_ast: nil,
+      chat_reply: nil,
+      chat_notes: [],
       lean_proof_state: nil,
       proof_summary: "Verification has not started yet.",
       graph_config: %{},
@@ -414,6 +447,7 @@ defmodule MathVizWeb.MathOrchestratorLive do
     graph = response.graph || %{}
     symbol = response.symbol || %{}
     proof = response.proof || %{}
+    response_mode = normalize_response_mode(response.mode)
 
     graph_config = %{
       desmos: Map.get(graph, :desmos, %{}),
@@ -421,18 +455,33 @@ defmodule MathVizWeb.MathOrchestratorLive do
     }
 
     %{
+      response_mode: response_mode,
       status: response_status(response.status),
       is_verified: response.verified,
-      sympy_ast: %{
-        statement: Map.get(symbol, :statement),
-        expression: Map.get(symbol, :expression),
-        source: response.adapter,
-        notes: Map.get(symbol, :notes, [])
-      },
-      lean_proof_state: Map.get(proof, :state),
-      proof_summary: Map.get(proof, :summary),
+      sympy_ast:
+        if(response_mode == :computation and symbol != %{},
+          do: %{
+            statement: Map.get(symbol, :statement),
+            expression: Map.get(symbol, :expression),
+            source: response.adapter,
+            notes: Map.get(symbol, :notes, [])
+          },
+          else: nil
+        ),
+      chat_reply: response.chat_reply,
+      chat_notes: response.chat_steps || [],
+      lean_proof_state: if(response_mode == :computation, do: Map.get(proof, :state), else: nil),
+      proof_summary:
+        cond do
+          response_mode == :chat -> "Theory response complete."
+          true -> Map.get(proof, :summary)
+        end,
       graph_config: graph_config,
-      output_latex: Map.get(graph, :latex_block) || Map.get(symbol, :latex, ""),
+      output_latex:
+        if(response_mode == :computation,
+          do: Map.get(graph, :latex_block) || Map.get(symbol, :latex, ""),
+          else: ""
+        ),
       error_message: response.error,
       adapter: response.adapter,
       timings: response.timings || %{},
@@ -515,6 +564,7 @@ defmodule MathVizWeb.MathOrchestratorLive do
   defp format_status(:computing), do: "Computing"
   defp format_status(:verifying), do: "Verifying"
   defp format_status(:rendering), do: "Rendering"
+  defp format_status(:complete), do: "Complete"
   defp format_status(:error), do: "Error"
   defp format_status(other), do: other |> to_string() |> String.capitalize()
 
@@ -528,6 +578,7 @@ defmodule MathVizWeb.MathOrchestratorLive do
       "computing" -> :computing
       "verifying" -> :verifying
       "rendering" -> :rendering
+      "complete" -> :complete
       "error" -> :error
       _ -> :error
     end
@@ -549,8 +600,12 @@ defmodule MathVizWeb.MathOrchestratorLive do
   defp graph_engine_label(:geogebra), do: "GeoGebra"
   defp graph_engine_label(other), do: other |> to_string() |> String.capitalize()
 
-  defp has_output?(sympy_ast, error_message),
-    do: not is_nil(sympy_ast) or not is_nil(error_message)
+  defp normalize_response_mode(mode) when mode in [:chat, :computation], do: mode
+  defp normalize_response_mode("chat"), do: :chat
+  defp normalize_response_mode(_mode), do: :computation
+
+  defp has_output?(sympy_ast, chat_reply, error_message),
+    do: not is_nil(sympy_ast) or is_binary(chat_reply) or not is_nil(error_message)
 
   defp has_proof?(lean_proof_state), do: is_binary(lean_proof_state) and lean_proof_state != ""
 
@@ -615,13 +670,14 @@ defmodule MathVizWeb.MathOrchestratorLive do
   defp upload_error_text(other) when is_binary(other), do: other
   defp upload_error_text(other), do: inspect(other)
 
-  defp status_dot_classes(status, is_verified, error_message) do
+  defp status_dot_classes(status, is_verified, chat_reply, error_message) do
     base = "inline-flex h-2.5 w-2.5 rounded-full"
 
     tone =
       cond do
         not is_nil(error_message) or status == :error -> "bg-rose-500"
         is_verified -> "bg-emerald-500"
+        is_binary(chat_reply) and chat_reply != "" -> "bg-sky-500"
         status in [:computing, :verifying, :rendering] -> "animate-pulse bg-amber-400"
         true -> "bg-stone-300"
       end

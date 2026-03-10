@@ -6,6 +6,7 @@ defmodule MathViz.ContractsTest do
 
   test "parses a valid AI response payload" do
     payload = %{
+      "mode" => "computation",
       "reasoning_steps" => ["Differentiate x squared.", "Graph the verified result."],
       "raw_latex" => "2 x",
       "sympy_executable" => "diff(x^2, x)",
@@ -14,14 +15,30 @@ defmodule MathViz.ContractsTest do
 
     assert {:ok,
             %AIResponse{
+              mode: :computation,
               raw_latex: "2 x",
               sympy_executable: "diff(x^2, x)",
               desmos_expressions: [%DesmosExpression{id: "graph1", latex: "y=2*x"}]
             }} = Contracts.parse_ai_response(payload)
   end
 
+  test "parses a valid chat AI response payload" do
+    payload = %{
+      "mode" => "chat",
+      "reasoning_steps" => ["Recognize the prompt as a conceptual calculus question."],
+      "chat_reply" => "An integral accumulates quantity over a range."
+    }
+
+    assert {:ok,
+            %AIResponse{
+              mode: :chat,
+              chat_reply: "An integral accumulates quantity over a range."
+            }} = Contracts.parse_ai_response(payload)
+  end
+
   test "rejects malformed AI response payloads" do
     payload = %{
+      "mode" => "computation",
       "reasoning_steps" => "not-a-list",
       "raw_latex" => "2 x",
       "sympy_executable" => "diff(x^2, x)",

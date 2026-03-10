@@ -10,11 +10,28 @@ defmodule MathVizWeb.SolveControllerTest do
 
     body = json_response(conn, 200)
 
+    assert body["mode"] == "computation"
     assert body["verified"] == true
     assert body["adapter"] == "stub"
     assert body["symbol"]["expression"] == "2*x"
     assert body["proof"]["state"] == "Proof complete"
     assert body["graph"]["desmos"]["expressions"] != []
+  end
+
+  test "POST /api/solve returns a chat payload for theory prompts", %{conn: conn} do
+    conn =
+      conn
+      |> put_req_header("accept", "application/json")
+      |> put_req_header("content-type", "application/json")
+      |> post(~p"/api/solve", Jason.encode!(%{"query" => "What is an integral?"}))
+
+    body = json_response(conn, 200)
+
+    assert body["mode"] == "chat"
+    assert body["verified"] == false
+    assert body["chat_reply"] =~ "integral"
+    assert body["graph"]["desmos"] == %{}
+    assert body["proof"] == %{}
   end
 
   test "POST /api/solve accepts multipart image uploads", %{conn: conn} do
@@ -29,6 +46,7 @@ defmodule MathVizWeb.SolveControllerTest do
 
     assert body["request"]["has_image"] == true
     assert body["request"]["image"]["filename"] == "whiteboard.png"
+    assert body["mode"] == "computation"
     assert body["verified"] == true
     assert body["graph"]["desmos"]["expressions"] != []
   end
