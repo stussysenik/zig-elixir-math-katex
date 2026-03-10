@@ -34,6 +34,7 @@ The design goal is simple: do not render graph layers until verification passes.
 - KaTeX output is rendered via a LiveView hook.
 - Desmos and GeoGebra are loaded lazily from the browser and only receive payloads after verification succeeds.
 - The default web shell is intentionally sparse: a blank canvas, a bottom command bar, and output that appears only when data exists.
+- The command bar now exposes the planned multimodal direction with a paperclip upload affordance, hidden file input, and drag-and-drop microcopy for textbook and whiteboard images.
 
 ## Setup
 

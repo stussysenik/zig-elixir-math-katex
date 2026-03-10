@@ -76,6 +76,12 @@
 - Hid output, proof, and graph sections entirely until the pipeline actually has data to render.
 - Simplified the graph hooks so they fall back to quiet visual shells instead of helper text while loading.
 
+### Checkpoint 9
+
+- Added the first visible multimodal affordances to the command bar: a paperclip trigger, hidden image file input, and microcopy for textbook and whiteboard uploads.
+- Added a drag-over hook so the command surface tints and gains a dashed ring when files hover over the window.
+- Kept engine diagnostics fully tucked behind the top-right trigger so the empty state still reads as a blank canvas.
+
 ### Verification performed
 
 - `mix test`
