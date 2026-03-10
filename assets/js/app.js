@@ -26,6 +26,7 @@ import {hooks as colocatedHooks} from "phoenix-colocated/math_viz"
 import {MathRender} from "./hooks/katex_hook"
 import {DesmosHook} from "./hooks/desmos_hook"
 import {GeoGebraHook} from "./hooks/geogebra_hook"
+import {VisionDropzoneHook} from "./hooks/vision_dropzone_hook"
 import topbar from "../vendor/topbar"
 
 const Hooks = {
@@ -33,6 +34,7 @@ const Hooks = {
   MathRender,
   DesmosHook,
   GeoGebraHook,
+  VisionDropzoneHook,
 }
 
 const csrfToken = document.querySelector("meta[name='csrf-token']").getAttribute("content")

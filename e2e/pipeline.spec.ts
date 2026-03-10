@@ -4,6 +4,8 @@ test("keeps the default screen blank except for the command bar", async ({ page 
   await page.goto("/");
 
   await expect(page.getByTestId("query-input")).toBeVisible();
+  await expect(page.getByTestId("vision-upload-trigger")).toBeVisible();
+  await expect(page.getByText(/drag & drop textbook photos/i)).toBeVisible();
   await expect(page.locator("#katex-output")).toHaveCount(0);
   await expect(page.locator("#desmos-surface")).toHaveCount(0);
   await expect(page.locator("#geogebra-surface")).toHaveCount(0);

@@ -292,18 +292,38 @@ defmodule MathVizWeb.MathOrchestratorLive do
                 for={@form}
                 id="solve-form"
                 phx-submit="solve"
-                class="mx-auto max-w-2xl rounded-[1.5rem] border border-stone-200 bg-white/95 p-3 shadow-lg shadow-stone-900/5"
+                phx-hook="VisionDropzoneHook"
+                class="mx-auto max-w-2xl rounded-[1.5rem] border border-stone-200 bg-white/95 p-3 shadow-lg shadow-stone-900/5 transition-colors"
               >
-                <textarea
-                  id={@form[:input_query].id}
-                  name={@form[:input_query].name}
-                  rows="1"
-                  class="min-h-[120px] w-full resize-none border-0 bg-transparent px-1 py-2 text-base text-stone-900 outline-none ring-0 placeholder:text-stone-400 focus:outline-none focus:ring-0"
-                  placeholder="Enter an equation or natural language query..."
-                  data-testid="query-input"
-                ><%= @form[:input_query].value %></textarea>
+                <div class="flex items-end gap-2">
+                  <label
+                    for="vision-upload"
+                    class="inline-flex h-10 w-10 shrink-0 cursor-pointer items-center justify-center rounded-full border border-stone-200 text-stone-500 transition hover:border-stone-300 hover:text-stone-900"
+                    data-testid="vision-upload-trigger"
+                    aria-label="Upload image"
+                  >
+                    <.icon name="hero-paper-clip" class="size-4" />
+                  </label>
 
-                <div class="mt-3 flex items-center justify-end">
+                  <input
+                    type="file"
+                    accept="image/jpeg,image/png,image/webp"
+                    class="hidden"
+                    id="vision-upload"
+                    data-testid="vision-upload"
+                  />
+
+                  <textarea
+                    id={@form[:input_query].id}
+                    name={@form[:input_query].name}
+                    rows="1"
+                    class="min-h-[120px] w-full resize-none border-0 bg-transparent px-1 py-2 text-base text-stone-900 outline-none ring-0 placeholder:text-stone-400 focus:outline-none focus:ring-0"
+                    placeholder="Enter an equation or natural language query..."
+                    data-testid="query-input"
+                  ><%= @form[:input_query].value %></textarea>
+                </div>
+
+                <div class="mt-3 flex items-center justify-end gap-3">
                   <button
                     type="submit"
                     class="inline-flex items-center rounded-full border border-stone-900 bg-stone-900 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-stone-800"
@@ -313,6 +333,13 @@ defmodule MathVizWeb.MathOrchestratorLive do
                     Submit
                   </button>
                 </div>
+
+                <p
+                  class="mt-2 text-center text-xs text-stone-400"
+                  data-testid="vision-file-label"
+                >
+                  Enter a query, or drag & drop textbook photos and whiteboard sketches (JPG/PNG/WebP, max 5MB).
+                </p>
               </.form>
             </div>
           </div>

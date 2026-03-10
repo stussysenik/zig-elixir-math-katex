@@ -9,6 +9,9 @@ defmodule MathVizWeb.MathOrchestratorLiveTest do
     assert html =~ "MathViz"
     assert has_element?(view, "#solve-form")
     assert has_element?(view, "[data-testid='query-input']")
+    assert has_element?(view, "[data-testid='vision-upload-trigger']")
+    assert has_element?(view, "#vision-upload")
+    assert html =~ "textbook photos and whiteboard sketches"
     refute html =~ "One prompt, one formal gate"
     refute has_element?(view, "#katex-output")
     refute has_element?(view, "[data-testid='proof-state']")
