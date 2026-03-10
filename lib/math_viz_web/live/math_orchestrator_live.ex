@@ -5,6 +5,7 @@ defmodule MathVizWeb.MathOrchestratorLive do
   alias MathViz.Solve
 
   @graph_engines [:desmos, :geogebra]
+  @default_solve_timeout_ms 8_000
 
   @impl true
   def mount(_params, _session, socket) do
@@ -35,23 +36,32 @@ defmodule MathVizWeb.MathOrchestratorLive do
         {:noreply, put_flash(socket, :error, "Enter a math prompt or attach an image to start.")}
 
       true ->
+        cancel_task(socket.assigns.current_task)
         vision = consume_vision_input(socket)
         request_id = socket.assigns.request_id + 1
         parent = self()
 
         task =
           Task.Supervisor.async_nolink(MathViz.TaskSupervisor, fn ->
-            Solve.run(%{"query" => raw_query, "vision" => vision},
+            solve_module().run(%{"query" => raw_query, "vision" => vision},
               notify: fn stage, payload ->
                 send(parent, {:pipeline_stage, request_id, stage, payload})
-              end
+              end,
+              timeout: solve_timeout_ms()
             )
           end)
+
+        current_task = %{
+          request_id: request_id,
+          task: task,
+          timer_ref:
+            Process.send_after(self(), {:task_timeout, request_id, task.ref}, solve_timeout_ms())
+        }
 
         {:noreply,
          socket
          |> clear_flash()
-         |> assign(reset_assigns(raw_query, request_id, task.ref))}
+         |> assign(reset_assigns(raw_query, request_id, current_task))}
     end
   end
 
@@ -94,33 +104,71 @@ defmodule MathVizWeb.MathOrchestratorLive do
     {:noreply, maybe_assign_status(socket, request_id, socket.assigns.status)}
   end
 
-  def handle_info({ref, {:ok, response}}, %{assigns: %{current_task_ref: ref}} = socket) do
+  def handle_info(
+        {ref, {:ok, response}},
+        %{assigns: %{current_task: %{task: %Task{ref: ref}}}} = socket
+      ) do
     Process.demonitor(ref, [:flush])
 
     {:noreply,
      socket
-     |> assign(current_task_ref: nil)
+     |> clear_current_task()
      |> assign(response_assigns(response))
      |> maybe_push_graph_events()}
   end
 
-  def handle_info({ref, {:error, reason}}, %{assigns: %{current_task_ref: ref}} = socket) do
+  def handle_info(
+        {ref, {:error, reason}},
+        %{assigns: %{current_task: %{task: %Task{ref: ref}}}} = socket
+      ) do
     Process.demonitor(ref, [:flush])
 
     {:noreply,
      socket
-     |> assign(current_task_ref: nil, status: :error, error_message: format_error(reason))
+     |> clear_current_task()
+     |> assign(
+       status: :error,
+       error_message: format_error(reason),
+       proof_summary: "The pipeline stopped before producing a verified result."
+     )
      |> put_flash(:error, "The pipeline could not complete.")}
   end
 
   def handle_info(
         {:DOWN, ref, :process, _pid, reason},
-        %{assigns: %{current_task_ref: ref}} = socket
+        %{assigns: %{current_task: %{task: %Task{ref: ref}}}} = socket
       ) do
     {:noreply,
      socket
-     |> assign(current_task_ref: nil, status: :error, error_message: inspect(reason))
+     |> clear_current_task()
+     |> assign(
+       status: :error,
+       error_message: crash_error_message(reason),
+       proof_summary: "The pipeline crashed before producing a verified result."
+     )
      |> put_flash(:error, "The pipeline crashed before returning a result.")}
+  end
+
+  def handle_info(
+        {:task_timeout, request_id, ref},
+        %{
+          assigns: %{
+            current_task: %{request_id: request_id, task: %Task{ref: ref}} = current_task
+          }
+        } =
+          socket
+      ) do
+    cancel_task(current_task)
+
+    {:noreply,
+     socket
+     |> assign(
+       current_task: nil,
+       status: :error,
+       error_message: timeout_error_message(),
+       proof_summary: "The pipeline timed out before producing a verified result."
+     )
+     |> put_flash(:error, timeout_error_message())}
   end
 
   def handle_info(_message, socket), do: {:noreply, socket}
@@ -373,6 +421,7 @@ defmodule MathVizWeb.MathOrchestratorLive do
                     id={@form[:input_query].id}
                     name={@form[:input_query].name}
                     rows="1"
+                    phx-hook="KeyboardSubmitHook"
                     class="min-h-[120px] w-full resize-none border-0 bg-transparent px-1 py-2 text-base text-stone-900 outline-none ring-0 placeholder:text-stone-400 focus:outline-none focus:ring-0"
                     placeholder="Enter an equation or natural language query..."
                     data-testid="query-input"
@@ -423,20 +472,20 @@ defmodule MathVizWeb.MathOrchestratorLive do
       timings: %{},
       form: to_form(%{"input_query" => ""}, as: :prompt),
       request_id: 0,
-      current_task_ref: nil,
+      current_task: nil,
       active_graph_engine: :desmos,
       desmos_json: "{}",
       geogebra_json: "{}"
     }
   end
 
-  defp reset_assigns(query, request_id, task_ref) do
+  defp reset_assigns(query, request_id, current_task) do
     default_assigns()
     |> Map.merge(%{
       input_query: query,
       status: :computing,
       request_id: request_id,
-      current_task_ref: task_ref,
+      current_task: current_task,
       proof_summary: "Preparing the natural-language morphism.",
       active_graph_engine: :desmos,
       form: to_form(%{"input_query" => query}, as: :prompt)
@@ -570,7 +619,60 @@ defmodule MathVizWeb.MathOrchestratorLive do
 
   defp format_error(reason) when is_binary(reason), do: reason
   defp format_error(%Ecto.Changeset{} = changeset), do: upload_error_text(changeset)
+  defp format_error(:missing_nvidia_nim_api_key), do: "NIM is disabled: set NVIDIA_NIM_API_KEY."
+  defp format_error({:nim_request_failed, reason}), do: "NIM request failed: #{inspect(reason)}"
+
+  defp format_error({:nim_invalid_json, reason}),
+    do: "NIM returned invalid JSON: #{inspect(reason)}"
+
+  defp format_error({:nim_unexpected_response, body}),
+    do: "NIM returned an unexpected response: #{inspect(body)}"
+
+  defp format_error({:nim_http_error, status, body}), do: "NIM HTTP #{status}: #{inspect(body)}"
+  defp format_error(:timeout), do: timeout_error_message()
+  defp format_error({:sympy_call_failed, {:timeout, _}}), do: timeout_error_message()
+  defp format_error({:sympy_unavailable, reason}), do: "SymPy is unavailable: #{inspect(reason)}"
   defp format_error(reason), do: inspect(reason)
+
+  defp solve_module, do: Application.get_env(:math_viz, :solve_module, Solve)
+
+  defp solve_timeout_ms do
+    Application.get_env(:math_viz, :solve_timeout_ms, @default_solve_timeout_ms)
+  end
+
+  defp clear_current_task(socket) do
+    cancel_task_timer(socket.assigns.current_task)
+    assign(socket, current_task: nil)
+  end
+
+  defp cancel_task(nil), do: :ok
+
+  defp cancel_task(%{task: %Task{pid: pid, ref: ref}} = current_task) do
+    cancel_task_timer(current_task)
+    Process.demonitor(ref, [:flush])
+
+    if is_pid(pid) and Process.alive?(pid) do
+      Process.exit(pid, :kill)
+    end
+
+    :ok
+  end
+
+  defp cancel_task_timer(nil), do: :ok
+
+  defp cancel_task_timer(%{timer_ref: timer_ref}) when is_reference(timer_ref) do
+    Process.cancel_timer(timer_ref)
+    :ok
+  end
+
+  defp cancel_task_timer(_current_task), do: :ok
+
+  defp timeout_error_message do
+    "Computation timed out. Try a simpler prompt or retry."
+  end
+
+  defp crash_error_message(:killed), do: timeout_error_message()
+  defp crash_error_message(reason), do: "The computation engine crashed: #{inspect(reason)}"
 
   defp response_status(status) when is_binary(status) do
     case status do

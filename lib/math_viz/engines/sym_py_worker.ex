@@ -37,7 +37,13 @@ defmodule MathViz.Engines.SymPyWorker do
     request_id = Integer.to_string(System.unique_integer([:positive]))
     request = Contracts.new_sympy_request(request_id, sympy_executable)
     timeout = Keyword.get(opts, :timeout, 5_000)
-    GenServer.call(server, {:execute, request}, timeout)
+
+    try do
+      GenServer.call(server, {:execute, request}, timeout)
+    catch
+      :exit, {:timeout, _} -> {:error, :timeout}
+      :exit, reason -> {:error, {:sympy_call_failed, reason}}
+    end
   end
 
   @impl true

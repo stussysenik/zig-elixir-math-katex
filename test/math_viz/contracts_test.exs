@@ -45,8 +45,8 @@ defmodule MathViz.ContractsTest do
       "desmos_expressions" => []
     }
 
-    assert {:error, {:invalid_string_list_field, "reasoning_steps"}} =
-             Contracts.parse_ai_response(payload)
+    assert {:error, %Ecto.Changeset{} = changeset} = Contracts.parse_ai_response(payload)
+    assert {"is invalid", _} = changeset.errors[:reasoning_steps]
   end
 
   test "parses a valid SymPy response payload" do

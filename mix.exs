@@ -27,7 +27,7 @@ defmodule MathViz.MixProject do
 
   def cli do
     [
-      preferred_envs: [precommit: :test]
+      preferred_envs: [precommit: :test, "qa.report": :test]
     ]
   end
 
@@ -91,7 +91,8 @@ defmodule MathViz.MixProject do
         "esbuild math_viz --minify",
         "phx.digest"
       ],
-      precommit: ["compile --warnings-as-errors", "deps.unlock --unused", "format", "test"]
+      precommit: ["compile --warnings-as-errors", "deps.unlock --unused", "format", "test"],
+      "test.eval": ["cmd .venv/bin/python eval/dspy_optimizer.py"]
     ]
   end
 end

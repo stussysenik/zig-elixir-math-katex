@@ -51,39 +51,12 @@ defmodule MathViz.Contracts do
   @spec ai_response_schema() :: map()
   def ai_response_schema, do: @ai_schema
 
-  @spec parse_ai_response(map()) :: {:ok, AIResponse.t()} | {:error, term()}
+  @spec parse_ai_response(map()) :: {:ok, AIResponse.t()} | {:error, Ecto.Changeset.t()}
   def parse_ai_response(payload) when is_map(payload) do
-    with {:ok, mode} <- fetch_ai_response_mode(payload),
-         {:ok, reasoning_steps} <- fetch_string_list(payload, "reasoning_steps") do
-      case mode do
-        :computation ->
-          with {:ok, raw_latex} <- fetch_string(payload, "raw_latex"),
-               {:ok, sympy_executable} <- fetch_string(payload, "sympy_executable"),
-               {:ok, desmos_expressions} <- fetch_desmos_expressions(payload) do
-            {:ok,
-             %AIResponse{
-               mode: :computation,
-               reasoning_steps: reasoning_steps,
-               raw_latex: raw_latex,
-               sympy_executable: sympy_executable,
-               desmos_expressions: desmos_expressions
-             }}
-          end
-
-        :chat ->
-          with {:ok, chat_reply} <- fetch_string(payload, "chat_reply") do
-            {:ok,
-             %AIResponse{
-               mode: :chat,
-               reasoning_steps: reasoning_steps,
-               chat_reply: chat_reply
-             }}
-          end
-      end
-    end
+    payload
+    |> AIResponse.changeset()
+    |> Ecto.Changeset.apply_action(:insert)
   end
-
-  def parse_ai_response(_payload), do: {:error, :invalid_ai_response}
 
   @spec new_sympy_request(String.t(), String.t()) :: SymPyRequest.t()
   def new_sympy_request(request_id, sympy_executable) do
@@ -162,45 +135,6 @@ defmodule MathViz.Contracts do
     %DesmosPayload{expressions: expressions, viewport: viewport}
   end
 
-  defp fetch_desmos_expressions(payload) do
-    payload
-    |> Map.get("desmos_expressions")
-    |> case do
-      expressions when is_list(expressions) ->
-        expressions
-        |> Enum.reduce_while({:ok, []}, fn expression, {:ok, acc} ->
-          case parse_desmos_expression(expression) do
-            {:ok, parsed} -> {:cont, {:ok, [parsed | acc]}}
-            {:error, reason} -> {:halt, {:error, reason}}
-          end
-        end)
-        |> case do
-          {:ok, expressions} -> {:ok, Enum.reverse(expressions)}
-          {:error, reason} -> {:error, reason}
-        end
-
-      _ ->
-        {:error, :missing_desmos_expressions}
-    end
-  end
-
-  defp parse_desmos_expression(payload) when is_map(payload) do
-    with {:ok, id} <- fetch_string(payload, "id"),
-         {:ok, latex} <- fetch_string(payload, "latex") do
-      {:ok, %DesmosExpression{id: id, latex: latex}}
-    end
-  end
-
-  defp parse_desmos_expression(_payload), do: {:error, :invalid_desmos_expression}
-
-  defp fetch_ai_response_mode(payload) do
-    case Map.get(payload, "mode") do
-      "computation" -> {:ok, :computation}
-      "chat" -> {:ok, :chat}
-      _ -> {:error, {:invalid_mode_field, "mode"}}
-    end
-  end
-
   defp fetch_string(payload, key) do
     case Map.get(payload, key) do
       value when is_binary(value) and value != "" -> {:ok, value}
@@ -220,18 +154,6 @@ defmodule MathViz.Contracts do
     case Map.get(payload, key) do
       value when is_boolean(value) -> {:ok, value}
       _ -> {:error, {:invalid_boolean_field, key}}
-    end
-  end
-
-  defp fetch_string_list(payload, key) do
-    case Map.get(payload, key) do
-      value when is_list(value) ->
-        if Enum.all?(value, &is_binary/1),
-          do: {:ok, value},
-          else: {:error, {:invalid_string_list_field, key}}
-
-      _ ->
-        {:error, {:invalid_string_list_field, key}}
     end
   end
 

@@ -13,7 +13,17 @@ defmodule MathViz.Pipeline do
     notify = Keyword.get(opts, :notify, fn _, _ -> :ok end)
     query = Query.new(query_text, Keyword.get(opts, :query_metadata, %{}))
 
-    with {:ok, ai_response, adapter, nlp_ms} <- route(query, opts, notify) do
+    with {:ok, ai_response, adapter, nlp_ms} <-
+           trace_call(
+             opts,
+             "pipeline.run",
+             "pipeline.route",
+             %{
+               from_kind: "function",
+               to_kind: "function"
+             },
+             fn -> route(query, opts, notify) end
+           ) do
       case ai_response.mode do
         :chat ->
           result =
@@ -94,21 +104,37 @@ defmodule MathViz.Pipeline do
   defp route(query, opts, notify) do
     notify.(:computing, %{query: query.text})
 
-    timed(fn ->
-      adapter_module =
-        nlp_adapter(Keyword.get(opts, :mode, Application.get_env(:math_viz, :nlp_mode, :stub)))
+    adapter_module =
+      nlp_adapter(Keyword.get(opts, :mode, Application.get_env(:math_viz, :nlp_mode, :stub)))
 
-      case adapter_module.to_contract(query, opts) do
-        {:ok, contract} -> {:ok, contract, adapter_name(adapter_module)}
-        {:error, reason} -> fallback_nlp(query, reason, opts)
-      end
+    adapter = adapter_name(adapter_module)
+
+    timed(fn ->
+      trace_call(
+        opts,
+        "pipeline.route",
+        "nlp_router.#{adapter}",
+        %{from_kind: "function", to_kind: "tool"},
+        fn ->
+          case adapter_module.to_contract(query, opts) do
+            {:ok, contract} -> {:ok, contract, adapter}
+            {:error, reason} -> fallback_nlp(query, reason, opts)
+          end
+        end
+      )
     end)
     |> expand_timing()
   end
 
   defp execute_sympy(ai_response, opts) do
     timed(fn ->
-      SymPyWorker.execute(ai_response.sympy_executable, opts)
+      trace_call(
+        opts,
+        "pipeline.run_computation",
+        "sympy_worker.execute",
+        %{from_kind: "function", to_kind: "tool"},
+        fn -> SymPyWorker.execute(ai_response.sympy_executable, opts) end
+      )
     end)
     |> case do
       {{:ok, response}, duration_ms} -> {:ok, response, duration_ms}
@@ -126,9 +152,16 @@ defmodule MathViz.Pipeline do
   defp verify(symbol, opts, notify) do
     notify.(:verifying, %{symbol: symbol.expression, raw_latex: symbol.latex})
 
+    verifier = Keyword.get(opts, :verifier, Application.fetch_env!(:math_viz, :verifier))
+
     timed(fn ->
-      verifier = Keyword.get(opts, :verifier, Application.fetch_env!(:math_viz, :verifier))
-      verifier.verify(symbol, opts)
+      trace_call(
+        opts,
+        "pipeline.run_computation",
+        "verifier.#{inspect(verifier)}",
+        %{from_kind: "function", to_kind: "tool", to_label: inspect(verifier)},
+        fn -> verifier.verify(symbol, opts) end
+      )
     end)
     |> case do
       {{:ok, proof}, duration_ms} -> {:ok, proof, duration_ms}
@@ -139,11 +172,17 @@ defmodule MathViz.Pipeline do
   defp render(symbol, proof, opts, notify) do
     notify.(:rendering, %{symbol: symbol.expression, proof: proof.state})
 
-    timed(fn ->
-      graph_builder =
-        Keyword.get(opts, :graph_builder, Application.fetch_env!(:math_viz, :graph_builder))
+    graph_builder =
+      Keyword.get(opts, :graph_builder, Application.fetch_env!(:math_viz, :graph_builder))
 
-      graph_builder.build(symbol, proof, opts)
+    timed(fn ->
+      trace_call(
+        opts,
+        "pipeline.run_computation",
+        "graph_builder.#{inspect(graph_builder)}",
+        %{from_kind: "function", to_kind: "tool", to_label: inspect(graph_builder)},
+        fn -> graph_builder.build(symbol, proof, opts) end
+      )
     end)
     |> case do
       {{:ok, graph}, duration_ms} -> {:ok, graph, duration_ms}
@@ -154,7 +193,14 @@ defmodule MathViz.Pipeline do
   defp fallback_nlp(query, reason, opts) do
     mode = Keyword.get(opts, :mode, Application.get_env(:math_viz, :nlp_mode, :stub))
 
-    if mode in [:dual, "dual", :nim, "nim"] do
+    fallback_mode =
+      Keyword.get(
+        opts,
+        :nim_fallback_mode,
+        Application.get_env(:math_viz, :nim_fallback_mode, :fallback)
+      )
+
+    if mode in [:dual, "dual", :nim, "nim"] and fallback_mode != :strict do
       {:ok, contract} = MathViz.Morphisms.NlpRouter.Stub.to_contract(query, opts)
 
       fallback_contract = %{
@@ -193,4 +239,31 @@ defmodule MathViz.Pipeline do
 
     {result, duration_ms}
   end
+
+  defp trace_call(opts, from, to, metadata, fun) do
+    started_at = System.monotonic_time()
+    result = fun.()
+
+    duration_ms =
+      System.monotonic_time()
+      |> Kernel.-(started_at)
+      |> System.convert_time_unit(:native, :millisecond)
+
+    MathViz.QA.CallGraph.record_call(Keyword.get(opts, :call_graph_pid), from, to, %{
+      from_kind: Map.get(metadata, :from_kind, "function"),
+      to_kind: Map.get(metadata, :to_kind, "function"),
+      from_label: Map.get(metadata, :from_label, from),
+      to_label: Map.get(metadata, :to_label, to),
+      kind: Map.get(metadata, :kind, "calls"),
+      status: call_status(result),
+      duration_ms: duration_ms,
+      metadata: Map.get(metadata, :metadata, %{})
+    })
+
+    result
+  end
+
+  defp call_status({:ok, _result}), do: "passed"
+  defp call_status({:error, _reason}), do: "failed"
+  defp call_status(_result), do: "passed"
 end

@@ -1,6 +1,8 @@
 import { expect, test } from "@playwright/test";
 
-test("keeps the default screen blank except for the command bar", async ({ page }) => {
+test("keeps the default screen blank except for the command bar", async ({
+  page,
+}) => {
   await page.goto("/");
 
   await expect(page.getByTestId("query-input")).toBeVisible();
@@ -19,13 +21,18 @@ test("runs the verified pipeline and switches graph tabs", async ({ page }) => {
   await page.getByTestId("submit-query").click();
 
   await expect
-    .poll(async () => page.getByTestId("status-label").getAttribute("data-status"))
+    .poll(async () =>
+      page.getByTestId("status-label").getAttribute("data-status"),
+    )
     .not.toBe("idle");
 
   await expect(page.locator("#katex-output .katex-display")).toBeVisible();
   await expect(page.getByTestId("proof-state")).toContainText("accepted");
   await expect(page.getByTestId("graph-tabs")).toBeVisible();
-  await expect(page.getByTestId("desmos-surface")).toHaveAttribute("data-has-expressions", "true");
+  await expect(page.getByTestId("desmos-surface")).toHaveAttribute(
+    "data-has-expressions",
+    "true",
+  );
   await expect(page.locator("#geogebra-surface")).toHaveCount(0);
 
   await page.getByTestId("graph-tab-geogebra").click();
@@ -33,7 +40,9 @@ test("runs the verified pipeline and switches graph tabs", async ({ page }) => {
   await expect(page.locator("#desmos-surface")).toHaveCount(0);
 });
 
-test("routes theory prompts to chat output without graph rendering", async ({ page }) => {
+test("routes theory prompts to chat output without graph rendering", async ({
+  page,
+}) => {
   await page.goto("/");
 
   await page.getByTestId("query-input").fill("What is an integral?");
@@ -45,4 +54,23 @@ test("routes theory prompts to chat output without graph rendering", async ({ pa
   await expect(page.locator("#desmos-surface")).toHaveCount(0);
   await expect(page.locator("#geogebra-surface")).toHaveCount(0);
   await expect(page.getByTestId("graph-tabs")).toHaveCount(0);
+});
+
+test("keeps Enter for newlines and submits on Control+Enter", async ({
+  page,
+}) => {
+  await page.goto("/");
+
+  const queryInput = page.getByTestId("query-input");
+
+  await queryInput.fill("What is an integral?");
+  await queryInput.press("Enter");
+
+  await expect(queryInput).toHaveValue("What is an integral?\n");
+  await expect(page.getByTestId("chat-output")).toHaveCount(0);
+
+  await queryInput.press("Control+Enter");
+
+  await expect(page.getByTestId("chat-output")).toBeVisible();
+  await expect(page.getByTestId("chat-output")).toContainText("integral");
 });

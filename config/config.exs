@@ -10,6 +10,7 @@ import Config
 config :math_viz,
   generators: [timestamp_type: :utc_datetime],
   nlp_mode: :stub,
+  nim_fallback_mode: :fallback,
   verifier: MathViz.Morphisms.Verifier.Mock,
   graph_builder: MathViz.Morphisms.GraphBuilder.Default,
   desmos_api_key: "dcb31709b452b1cf9dc26972add0fda6"

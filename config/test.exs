@@ -29,6 +29,7 @@ config :phoenix,
 
 config :math_viz,
   nlp_mode: :stub,
+  nim_fallback_mode: :fallback,
   verifier: MathViz.Morphisms.Verifier.Mock,
   graph_builder: MathViz.Morphisms.GraphBuilder.Default,
   verify_delay_ms: 10

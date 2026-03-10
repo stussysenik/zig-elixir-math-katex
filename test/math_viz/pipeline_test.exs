@@ -15,9 +15,23 @@ defmodule MathViz.PipelineTest.RejectingVerifier do
 end
 
 defmodule MathViz.PipelineTest do
-  use ExUnit.Case, async: true
+  use ExUnit.Case, async: false
 
   alias MathViz.Pipeline
+
+  setup do
+    previous_nvidia_nim = Application.get_env(:math_viz, :nvidia_nim)
+
+    Application.put_env(
+      :math_viz,
+      :nvidia_nim,
+      Keyword.put(previous_nvidia_nim || [], :api_key, nil)
+    )
+
+    on_exit(fn -> restore_env(:nvidia_nim, previous_nvidia_nim) end)
+
+    :ok
+  end
 
   test "stub mode returns a verified result and graph payloads" do
     assert {:ok, result} = Pipeline.run("Graph the derivative of x^2", mode: :stub)
@@ -53,6 +67,11 @@ defmodule MathViz.PipelineTest do
     assert Enum.any?(result.symbol.notes, &String.contains?(&1, "Fell back after NIM error"))
   end
 
+  test "strict fallback mode exposes the NIM error instead of swapping in the stub" do
+    assert {:error, :missing_nvidia_nim_api_key} =
+             Pipeline.run("derivative of sin(x)", mode: :dual, nim_fallback_mode: :strict)
+  end
+
   test "verification failure blocks graph rendering" do
     assert {:ok, result} =
              Pipeline.run("derivative of sin(x)",
@@ -85,4 +104,7 @@ defmodule MathViz.PipelineTest do
     assert result.graph.desmos.expressions |> hd() |> Map.get(:latex) == "y=x^2"
     assert Enum.any?(result.symbol.notes, &String.contains?(&1, "Vision input attached"))
   end
+
+  defp restore_env(key, nil), do: Application.delete_env(:math_viz, key)
+  defp restore_env(key, value), do: Application.put_env(:math_viz, key, value)
 end

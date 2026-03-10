@@ -106,3 +106,38 @@
 - Replace the mock verifier with a real Lean worker boundary.
 - Add notebook persistence and export formats.
 - Add human-in-the-loop OCR correction for ambiguous vision parses.
+
+### Checkpoint 11
+
+- Tightened AI response contract validation with embedded schemas for AIResponse and DesmosExpression.
+- Switched parse_ai_response/1 to apply the AIResponse changeset and return Ecto changeset errors.
+- Added SymPy worker timeout/exit handling for safer pipeline failures.
+- Added LiveView task cancellation + timeout handling and a keyboard submit hook on the prompt textarea.
+- Hardened the Desmos hook lifecycle with script-load state and calculator cleanup.
+- Added a DSPy evaluation harness and dataset, plus Python deps and a mix test.eval alias.
+- Updated contract tests to assert validation errors via Ecto changesets.
+
+### Checkpoint 12
+
+- Added `MathViz.RuntimeEnv` so runtime config accepts both `NVIDIA_NIM_API_KEY` and legacy `NIM_API_KEY`.
+- Changed development fallback policy so NIM routing failures surface directly in the UI instead of silently swapping to the stub.
+- Added a new `mix qa.report` harness that runs ExUnit, Playwright, and Cypress smoke lanes and writes:
+  - `tmp/qa/latest/report.md`
+  - `tmp/qa/latest/summary.json`
+  - `tmp/qa/latest/tool_call_graph.json`
+  - per-lane raw logs under `tmp/qa/latest/raw/`
+- Added internal pipeline call-graph instrumentation for harness probe runs without introducing an Ecto repo or SQLite.
+- Added Cypress smoke coverage mirroring the existing Playwright happy paths.
+- Added harness-level tests for call-graph capture, Markdown rendering, and artifact generation.
+
+### Verification performed
+
+- `mix qa.report --scope smoke --browser playwright`
+- `mix qa.report --scope smoke --browser all`
+- `mix precommit`
+
+### Current state
+
+- The QA harness is green across ExUnit, Playwright, and Cypress smoke lanes.
+- The app now boots into `:dual` mode when only the legacy `NIM_API_KEY` is present.
+- Strict development mode now exposes real NIM errors; the current live NIM issue is an HTTP `404`, not silent stub fallback.

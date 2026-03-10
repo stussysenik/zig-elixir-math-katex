@@ -1,5 +1,7 @@
 import Config
 
+alias MathViz.RuntimeEnv
+
 project_root = Path.expand("..", __DIR__)
 
 load_env_file = fn relative_path ->
@@ -39,22 +41,11 @@ end
 
 Enum.each([".env.local", ".env"], load_env_file)
 
-nlp_mode =
-  case System.get_env("MATH_VIZ_NLP_MODE") do
-    "nim" -> :nim
-    "dual" -> :dual
-    "stub" -> :stub
-    nil -> if(System.get_env("NVIDIA_NIM_API_KEY"), do: :dual, else: :stub)
-    _ -> :stub
-  end
+nlp_mode = RuntimeEnv.nlp_mode()
 
 config :math_viz, :nlp_mode, nlp_mode
 
-config :math_viz, :nvidia_nim,
-  api_key: System.get_env("NVIDIA_NIM_API_KEY"),
-  base_url: System.get_env("NVIDIA_NIM_BASE_URL", "https://integrate.api.nvidia.com/v1"),
-  model: System.get_env("NVIDIA_NIM_MODEL", "moonshotai/kimi-k2-5"),
-  timeout_ms: String.to_integer(System.get_env("NVIDIA_NIM_TIMEOUT_MS", "15000"))
+config :math_viz, :nvidia_nim, RuntimeEnv.nvidia_nim_config()
 
 config :math_viz,
        :desmos_api_key,

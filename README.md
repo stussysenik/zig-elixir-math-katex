@@ -46,12 +46,15 @@ It routes input into a strict contract, executes symbolic work through SymPy, ga
 
 - Phoenix 1.8 LiveView UI with a sparse bottom-docked command bar
 - Native LiveView image uploads with drag-and-drop and shared 5MB validation
+- `Cmd/Ctrl+Enter` submit support with newline-preserving textarea behavior
 - KaTeX rendering for symbolic output
 - Lazy-loaded Desmos and GeoGebra hooks
 - Headless `POST /api/solve` endpoint for JSON and multipart clients
 - CLI entrypoint via `mix math.prove "..."` using the same pipeline
 - Theory/computation mode split in the response contract
-- ExUnit and Playwright coverage for the main shipped flows
+- Strict development-mode surfacing for NIM routing failures instead of silent stub fallback
+- ExUnit, Playwright, and Cypress smoke coverage for the main shipped flows
+- `mix qa.report` harness with Markdown, JSON, and tool-call-graph artifacts under `tmp/qa/latest`
 
 ## Stack
 
@@ -59,7 +62,8 @@ It routes input into a strict contract, executes symbolic work through SymPy, ga
 - Validation and integration: Ecto embedded schemas, `Req`, `Jason`
 - Symbolic engine: Python + SymPy over a supervised Port
 - Frontend: server-rendered LiveView, plain JS hooks, Tailwind CSS v4, KaTeX
-- Browser automation: Playwright
+- Browser automation: Playwright and Cypress
+- QA harness: `mix qa.report`, file-based artifacts, internal pipeline call graph
 - Optional dev shell: Nix via `flake.nix`
 
 ## Quick Start
@@ -92,6 +96,7 @@ Supported variables:
 
 - `MATH_VIZ_NLP_MODE=stub|nim|dual`
 - `NVIDIA_NIM_API_KEY`
+- `NIM_API_KEY` (legacy alias for local compatibility)
 - `NVIDIA_NIM_BASE_URL`
 - `NVIDIA_NIM_MODEL`
 - `NVIDIA_NIM_TIMEOUT_MS`
@@ -102,6 +107,10 @@ Routing behavior:
 - `stub`: always use deterministic local routing
 - `nim`: always use NVIDIA NIM and fail if the key is missing
 - `dual`: try NVIDIA NIM first, then fall back to the stub router
+
+If `MATH_VIZ_NLP_MODE` is unset, the app auto-selects `dual` when either `NVIDIA_NIM_API_KEY` or legacy `NIM_API_KEY` is present.
+
+In development, NIM routing failures are surfaced directly in the UI instead of silently swapping to the stub router. In test and production, the existing fallback behavior remains available unless overridden.
 
 ## Run
 
@@ -118,6 +127,7 @@ Open `http://localhost:4000`.
 ```bash
 mix math.prove "Graph the derivative of x^2"
 mix math.prove "What is an integral?"
+mix qa.report --scope smoke --browser all
 ```
 
 ### Headless API
@@ -182,11 +192,26 @@ Run the full local verification pass:
 mix precommit
 ```
 
+Run the unified QA harness:
+
+```bash
+mix qa.report --scope smoke --browser all
+```
+
+The harness writes:
+
+- `tmp/qa/latest/report.md`
+- `tmp/qa/latest/summary.json`
+- `tmp/qa/latest/tool_call_graph.json`
+- per-lane raw logs under `tmp/qa/latest/raw/`
+
 Run browser tests directly:
 
 ```bash
 bun run playwright:install
-bun run test:e2e
+bun run cypress:install
+bun run test:e2e:playwright
+bun run test:e2e:cypress
 ```
 
 ## Repo Notes
