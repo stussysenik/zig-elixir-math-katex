@@ -1,16 +1,33 @@
+defmodule MathViz.PipelineTest.RejectingVerifier do
+  @behaviour MathViz.Morphisms.Verifier
+
+  alias MathViz.Core.{Proof, Symbol}
+
+  @impl true
+  def verify(%Symbol{}, _opts) do
+    {:ok,
+     %Proof{
+       verified: false,
+       state: "Verification rejected",
+       summary: "Rejected by the test verifier."
+     }}
+  end
+end
+
 defmodule MathViz.PipelineTest do
   use ExUnit.Case, async: true
 
   alias MathViz.Pipeline
 
   test "stub mode returns a verified result and graph payloads" do
-    assert {:ok, result} = Pipeline.run("derivative of sin(x)", mode: :stub)
+    assert {:ok, result} = Pipeline.run("Graph the derivative of x^2", mode: :stub)
 
     assert result.is_verified
-    assert result.symbol.expression == "cos(x)"
+    assert result.symbol.expression == "2*x"
     assert result.proof.state == "Proof complete"
-    assert result.graph.desmos.expression == "y=\\cos(x)"
-    assert result.graph.geogebra.command == "f(x)=\\cos(x)"
+    assert result.graph.desmos.expressions |> hd() |> Map.get(:latex) == "y=2*x"
+    assert result.graph.geogebra.command == "f(x)=2*x"
+    assert is_integer(result.timings.sympy_ms)
   end
 
   test "dual mode falls back to the stub when NIM is unavailable" do
@@ -21,7 +38,11 @@ defmodule MathViz.PipelineTest do
   end
 
   test "verification failure blocks graph rendering" do
-    assert {:ok, result} = Pipeline.run("y=reject(x)", mode: :stub)
+    assert {:ok, result} =
+             Pipeline.run("derivative of sin(x)",
+               mode: :stub,
+               verifier: MathViz.PipelineTest.RejectingVerifier
+             )
 
     refute result.is_verified
     assert result.error == :verification_failed

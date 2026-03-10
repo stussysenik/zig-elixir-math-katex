@@ -1,7 +1,9 @@
 defmodule MathViz.Pipeline do
   @moduledoc "CLI-first orchestration for the verified-first math pipeline."
 
+  alias MathViz.Contracts
   alias MathViz.Core.{Graph, Query}
+  alias MathViz.Engines.SymPyWorker
   alias MathViz.Result
 
   @type notify_fun :: (atom(), map() -> any())
@@ -11,7 +13,9 @@ defmodule MathViz.Pipeline do
     notify = Keyword.get(opts, :notify, fn _, _ -> :ok end)
     query = Query.new(query_text)
 
-    with {:ok, symbol, adapter, nlp_ms} <- route(query, opts, notify),
+    with {:ok, ai_response, adapter, nlp_ms} <- route(query, opts, notify),
+         {:ok, sympy_response, sympy_ms} <- execute_sympy(ai_response, opts),
+         {:ok, symbol} <- build_symbol(query, ai_response, sympy_response, adapter),
          {:ok, proof, verify_ms} <- verify(symbol, opts, notify) do
       case proof.verified do
         true ->
@@ -24,7 +28,12 @@ defmodule MathViz.Pipeline do
                 graph: graph,
                 is_verified: true,
                 status: :rendering,
-                timings: %{nlp_ms: nlp_ms, verify_ms: verify_ms, graph_ms: graph_ms},
+                timings: %{
+                  nlp_ms: nlp_ms,
+                  sympy_ms: sympy_ms,
+                  verify_ms: verify_ms,
+                  graph_ms: graph_ms
+                },
                 adapter: adapter
               }
 
@@ -41,7 +50,7 @@ defmodule MathViz.Pipeline do
               graph: %Graph{latex_block: symbol.latex},
               is_verified: false,
               status: :error,
-              timings: %{nlp_ms: nlp_ms, verify_ms: verify_ms, graph_ms: 0},
+              timings: %{nlp_ms: nlp_ms, sympy_ms: sympy_ms, verify_ms: verify_ms, graph_ms: 0},
               adapter: adapter,
               error: :verification_failed
             }
@@ -59,18 +68,36 @@ defmodule MathViz.Pipeline do
     notify.(:computing, %{query: query.text})
 
     timed(fn ->
-      adapter_module = nlp_adapter(Keyword.get(opts, :mode, Application.get_env(:math_viz, :nlp_mode, :stub)))
+      adapter_module =
+        nlp_adapter(Keyword.get(opts, :mode, Application.get_env(:math_viz, :nlp_mode, :stub)))
 
-      case adapter_module.to_symbol(query, opts) do
-        {:ok, symbol} -> {:ok, symbol, symbol.source}
+      case adapter_module.to_contract(query, opts) do
+        {:ok, contract} -> {:ok, contract, adapter_name(adapter_module)}
         {:error, reason} -> fallback_nlp(query, reason, opts)
       end
     end)
     |> expand_timing()
   end
 
+  defp execute_sympy(ai_response, opts) do
+    timed(fn ->
+      SymPyWorker.execute(ai_response.sympy_executable, opts)
+    end)
+    |> case do
+      {{:ok, response}, duration_ms} -> {:ok, response, duration_ms}
+      {{:error, _} = error, _duration_ms} -> error
+    end
+  end
+
+  defp build_symbol(query, ai_response, sympy_response, adapter) do
+    case Contracts.to_symbol(query, ai_response, sympy_response) do
+      {:ok, symbol} -> {:ok, %{symbol | source: adapter}}
+      {:error, reason} -> {:error, reason}
+    end
+  end
+
   defp verify(symbol, opts, notify) do
-    notify.(:verifying, %{symbol: symbol.expression})
+    notify.(:verifying, %{symbol: symbol.expression, raw_latex: symbol.latex})
 
     timed(fn ->
       verifier = Keyword.get(opts, :verifier, Application.fetch_env!(:math_viz, :verifier))
@@ -86,7 +113,9 @@ defmodule MathViz.Pipeline do
     notify.(:rendering, %{symbol: symbol.expression, proof: proof.state})
 
     timed(fn ->
-      graph_builder = Keyword.get(opts, :graph_builder, Application.fetch_env!(:math_viz, :graph_builder))
+      graph_builder =
+        Keyword.get(opts, :graph_builder, Application.fetch_env!(:math_viz, :graph_builder))
+
       graph_builder.build(symbol, proof, opts)
     end)
     |> case do
@@ -99,15 +128,28 @@ defmodule MathViz.Pipeline do
     mode = Keyword.get(opts, :mode, Application.get_env(:math_viz, :nlp_mode, :stub))
 
     if mode in [:dual, "dual", :nim, "nim"] do
-      {:ok, symbol} = MathViz.Morphisms.NlpRouter.Stub.to_symbol(query, opts)
-      {:ok, %{symbol | source: :stub, notes: ["Fell back after NIM error: #{inspect(reason)}" | symbol.notes]}, :stub}
+      {:ok, contract} = MathViz.Morphisms.NlpRouter.Stub.to_contract(query, opts)
+
+      fallback_contract = %{
+        contract
+        | reasoning_steps: [
+            "Fell back after NIM error: #{inspect(reason)}" | contract.reasoning_steps
+          ]
+      }
+
+      {:ok, fallback_contract, :stub}
     else
       {:error, reason}
     end
   end
 
-  defp expand_timing({{:ok, symbol, adapter}, duration_ms}), do: {:ok, symbol, adapter, duration_ms}
+  defp expand_timing({{:ok, contract, adapter}, duration_ms}),
+    do: {:ok, contract, adapter, duration_ms}
+
   defp expand_timing({other, _duration_ms}), do: other
+
+  defp adapter_name(MathViz.Morphisms.NlpRouter.Nim), do: :nim
+  defp adapter_name(MathViz.Morphisms.NlpRouter.Stub), do: :stub
 
   defp nlp_adapter(:nim), do: MathViz.Morphisms.NlpRouter.Nim
   defp nlp_adapter("nim"), do: MathViz.Morphisms.NlpRouter.Nim
@@ -118,7 +160,10 @@ defmodule MathViz.Pipeline do
   defp timed(fun) do
     started_at = System.monotonic_time()
     result = fun.()
-    duration_ms = System.monotonic_time() - started_at |> System.convert_time_unit(:native, :millisecond)
+
+    duration_ms =
+      (System.monotonic_time() - started_at) |> System.convert_time_unit(:native, :millisecond)
+
     {result, duration_ms}
   end
 end

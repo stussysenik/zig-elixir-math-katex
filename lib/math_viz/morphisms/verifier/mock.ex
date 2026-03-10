@@ -7,7 +7,9 @@ defmodule MathViz.Morphisms.Verifier.Mock do
 
   @impl true
   def verify(%Symbol{} = symbol, opts) do
-    delay_ms = Keyword.get(opts, :verify_delay_ms, Application.get_env(:math_viz, :verify_delay_ms, 1000))
+    delay_ms =
+      Keyword.get(opts, :verify_delay_ms, Application.get_env(:math_viz, :verify_delay_ms, 1000))
+
     Process.sleep(delay_ms)
 
     verified? =

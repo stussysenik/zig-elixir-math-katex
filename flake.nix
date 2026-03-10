@@ -22,6 +22,7 @@
               erlang
               bun
               python3
+              python3Packages.sympy
               elan
             ];
           };

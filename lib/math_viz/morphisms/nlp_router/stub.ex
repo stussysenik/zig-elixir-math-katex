@@ -3,58 +3,58 @@ defmodule MathViz.Morphisms.NlpRouter.Stub do
 
   @behaviour MathViz.Morphisms.NlpRouter
 
-  alias MathViz.Core.{Query, Symbol}
+  alias MathViz.Contracts.{AIResponse, DesmosExpression}
+  alias MathViz.Core.Query
 
   @impl true
-  def to_symbol(%Query{text: text}, _opts) do
+  def to_contract(%Query{text: text}, _opts) do
     normalized = String.downcase(String.trim(text))
 
-    symbol =
+    contract =
       cond do
         normalized == "" ->
-          default_symbol()
+          default_contract()
 
         String.contains?(normalized, "derivative of sin") ->
-          %Symbol{
-            statement: "Derivative of sin(x)",
-            expression: "cos(x)",
-            latex: "\\cos(x)",
-            graph_expression: "y=\\cos(x)",
-            source: :stub,
-            raw: %{pattern: "derivative_of_sin"},
-            notes: ["Derived locally without external API access."]
-          }
+          calculus_contract(
+            "differentiate sine",
+            "\\cos(x)",
+            "diff(sin(x), x)",
+            "y=\\cos(x)"
+          )
 
         String.contains?(normalized, "derivative of cos") ->
-          %Symbol{
-            statement: "Derivative of cos(x)",
-            expression: "-sin(x)",
-            latex: "-\\sin(x)",
-            graph_expression: "y=-\\sin(x)",
-            source: :stub,
-            raw: %{pattern: "derivative_of_cos"},
-            notes: ["Derived locally without external API access."]
-          }
+          calculus_contract(
+            "differentiate cosine",
+            "-\\sin(x)",
+            "diff(cos(x), x)",
+            "y=-\\sin(x)"
+          )
+
+        String.contains?(normalized, "derivative of x^2") ->
+          calculus_contract(
+            "differentiate x squared",
+            "2 x",
+            "diff(x^2, x)",
+            "y=2*x"
+          )
 
         String.contains?(normalized, "integral of x^2") ->
-          %Symbol{
-            statement: "Integral of x^2",
-            expression: "x^3 / 3",
-            latex: "\\frac{x^3}{3} + C",
-            graph_expression: "y=x^3/3",
-            source: :stub,
-            raw: %{pattern: "integral_of_x_squared"},
-            notes: ["Derived locally without external API access."]
-          }
+          calculus_contract(
+            "integrate x squared",
+            "\\frac{x^3}{3}",
+            "integrate(x^2, x)",
+            "y=x^3/3"
+          )
 
         explicit_expression?(text) ->
-          build_expression_symbol(text)
+          build_expression_contract(text)
 
         true ->
-          default_symbol(text)
+          default_contract(text)
       end
 
-    {:ok, symbol}
+    {:ok, contract}
   end
 
   defp explicit_expression?(text) do
@@ -63,7 +63,7 @@ defmodule MathViz.Morphisms.NlpRouter.Stub do
       Regex.match?(~r/x\^?\d?/i, text)
   end
 
-  defp build_expression_symbol(text) do
+  defp build_expression_contract(text) do
     expression =
       text
       |> String.trim()
@@ -71,21 +71,19 @@ defmodule MathViz.Morphisms.NlpRouter.Stub do
       |> String.trim_leading("graph ")
       |> String.trim()
 
-    graph_expression =
-      if String.contains?(expression, "=") do
-        expression
-      else
-        "y=#{expression}"
-      end
+    graph_expression = relation_from_expression(expression)
+    sympy_executable = expression_for_sympy(expression)
 
-    %Symbol{
-      statement: "Parsed expression",
-      expression: expression,
-      latex: graph_expression_to_latex(graph_expression),
-      graph_expression: graph_expression_to_latex(graph_expression),
-      source: :stub,
-      raw: %{pattern: "expression"},
-      notes: ["Parsed directly from the raw query."]
+    %AIResponse{
+      reasoning_steps: [
+        "Parse the prompt directly into a local symbolic expression.",
+        "Execute the expression through the SymPy boundary."
+      ],
+      raw_latex: graph_expression_to_latex(graph_expression),
+      sympy_executable: sympy_executable,
+      desmos_expressions: [
+        %DesmosExpression{id: "graph1", latex: graph_expression_to_latex(graph_expression)}
+      ]
     }
   end
 
@@ -95,15 +93,50 @@ defmodule MathViz.Morphisms.NlpRouter.Stub do
     |> String.replace("*", " ")
   end
 
-  defp default_symbol(text \\ "Plot a parabola") do
-    %Symbol{
-      statement: if(text == "", do: "Plot a parabola", else: text),
-      expression: "x^2",
-      latex: "x^2",
-      graph_expression: "y=x^2",
-      source: :stub,
-      raw: %{pattern: "default"},
-      notes: ["Fell back to the built-in demo function y = x^2."]
+  defp relation_from_expression(expression) do
+    if String.contains?(expression, "="), do: expression, else: "y=#{expression}"
+  end
+
+  defp expression_for_sympy(expression) do
+    if String.contains?(expression, "=") do
+      expression
+      |> String.split("=", parts: 2)
+      |> List.last()
+      |> String.trim()
+    else
+      expression
+    end
+  end
+
+  defp calculus_contract(step, raw_latex, sympy_executable, graph_latex) do
+    %AIResponse{
+      reasoning_steps: [
+        "Interpret the request as a calculus transformation.",
+        "Use SymPy to #{step}.",
+        "Return the verified expression to the graph layer."
+      ],
+      raw_latex: raw_latex,
+      sympy_executable: sympy_executable,
+      desmos_expressions: [%DesmosExpression{id: "graph1", latex: graph_latex}]
     }
+  end
+
+  defp default_contract(text \\ "Plot a parabola") do
+    %AIResponse{
+      reasoning_steps: [
+        "Fall back to the built-in demo function.",
+        "Render the verified parabola after execution."
+      ],
+      raw_latex: "x^2",
+      sympy_executable: "x^2",
+      desmos_expressions: [%DesmosExpression{id: "graph1", latex: "y=x^2"}]
+    }
+    |> maybe_annotate_default(text)
+  end
+
+  defp maybe_annotate_default(%AIResponse{} = contract, ""), do: contract
+
+  defp maybe_annotate_default(%AIResponse{} = contract, text) do
+    %{contract | reasoning_steps: ["Prompt: #{String.trim(text)}" | contract.reasoning_steps]}
   end
 end

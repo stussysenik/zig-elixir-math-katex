@@ -74,7 +74,11 @@ defmodule MathViz.MixProject do
   # See the documentation for `Mix` for more info on aliases.
   defp aliases do
     [
-      setup: ["deps.get", "cmd bun install", "assets.setup", "assets.build"],
+      setup: ["deps.get", "python.setup", "cmd bun install", "assets.setup", "assets.build"],
+      "python.setup": [
+        "cmd python3 -m venv .venv",
+        "cmd .venv/bin/python -m pip install -r requirements.txt"
+      ],
       "assets.setup": ["cmd bun install", "esbuild.install --if-missing"],
       "assets.build": [
         "compile",

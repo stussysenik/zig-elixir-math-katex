@@ -19,9 +19,23 @@ defmodule Mix.Tasks.Math.Prove do
 
     case MathViz.Pipeline.run(query, notify: notify) do
       {:ok, result} ->
+        ai_response = result.symbol.raw[:ai_response] || %{}
+        sympy_response = result.symbol.raw[:sympy_response] || %{}
+
         Mix.shell().info("")
         Mix.shell().info("Adapter: #{result.adapter}")
         Mix.shell().info("Verified: #{result.is_verified}")
+
+        Mix.shell().info(
+          "Reasoning: #{Enum.join(Map.get(ai_response, :reasoning_steps, []), " | ")}"
+        )
+
+        Mix.shell().info("SymPy executable: #{Map.get(ai_response, :sympy_executable, "n/a")}")
+
+        Mix.shell().info(
+          "SymPy result: #{Map.get(sympy_response, :result_string, result.symbol.expression)}"
+        )
+
         Mix.shell().info("Expression: #{result.symbol.expression}")
         Mix.shell().info("LaTeX: #{result.symbol.latex}")
         Mix.shell().info("Proof: #{result.proof.state}")

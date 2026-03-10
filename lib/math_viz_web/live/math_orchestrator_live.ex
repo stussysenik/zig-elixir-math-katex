@@ -90,7 +90,10 @@ defmodule MathVizWeb.MathOrchestratorLive do
      |> put_flash(:error, "The pipeline could not complete.")}
   end
 
-  def handle_info({:DOWN, ref, :process, _pid, reason}, %{assigns: %{current_task_ref: ref}} = socket) do
+  def handle_info(
+        {:DOWN, ref, :process, _pid, reason},
+        %{assigns: %{current_task_ref: ref}} = socket
+      ) do
     {:noreply,
      socket
      |> assign(current_task_ref: nil, status: :error, error_message: inspect(reason))
@@ -133,11 +136,17 @@ defmodule MathVizWeb.MathOrchestratorLive do
                     Engine
                   </summary>
                   <div class="mt-4 w-full min-w-[18rem] border-l border-stone-200 pl-4">
-                    <div class="grid gap-2 text-xs uppercase tracking-[0.2em] text-stone-500 sm:grid-cols-3">
+                    <div class="grid gap-2 text-xs uppercase tracking-[0.2em] text-stone-500 sm:grid-cols-4">
                       <div>
                         <p>N -> S</p>
                         <p class="mt-1 text-base font-medium tracking-normal text-stone-900">
                           {Map.get(@timings, :nlp_ms, 0)} ms
+                        </p>
+                      </div>
+                      <div>
+                        <p>SymPy</p>
+                        <p class="mt-1 text-base font-medium tracking-normal text-stone-900">
+                          {Map.get(@timings, :sympy_ms, 0)} ms
                         </p>
                       </div>
                       <div>
@@ -407,10 +416,14 @@ defmodule MathVizWeb.MathOrchestratorLive do
   end
 
   defp result_error(%{error: nil}), do: nil
-  defp result_error(%{error: :verification_failed}), do: "Verification failed, so graph rendering remains gated."
+
+  defp result_error(%{error: :verification_failed}),
+    do: "Verification failed, so graph rendering remains gated."
+
   defp result_error(%{error: error}), do: format_error(error)
 
-  defp maybe_assign_status(socket, request_id, status) when request_id == socket.assigns.request_id do
+  defp maybe_assign_status(socket, request_id, status)
+       when request_id == socket.assigns.request_id do
     proof_summary =
       case status do
         :computing -> "Running the natural-language morphism into a symbolic state."
@@ -426,7 +439,14 @@ defmodule MathVizWeb.MathOrchestratorLive do
 
   defp maybe_assign_symbol_preview(socket, request_id, %{symbol: expression})
        when request_id == socket.assigns.request_id do
-    assign(socket, sympy_ast: %{statement: "Pending verification", expression: expression, source: socket.assigns.adapter, notes: []})
+    assign(socket,
+      sympy_ast: %{
+        statement: "Pending verification",
+        expression: expression,
+        source: socket.assigns.adapter,
+        notes: []
+      }
+    )
   end
 
   defp maybe_assign_symbol_preview(socket, _request_id, _payload), do: socket
@@ -435,13 +455,28 @@ defmodule MathVizWeb.MathOrchestratorLive do
 
   defp maybe_push_graph_events(socket) do
     socket
-    |> maybe_push_graph_event(:desmos, "desmos:update", Map.get(socket.assigns.graph_config, :desmos, %{}))
-    |> maybe_push_graph_event(:geogebra, "geogebra:update", Map.get(socket.assigns.graph_config, :geogebra, %{}))
+    |> maybe_push_graph_event(
+      :desmos,
+      "update_graph",
+      Map.get(socket.assigns.graph_config, :desmos, %{})
+    )
+    |> maybe_push_graph_event(
+      :geogebra,
+      "geogebra:update",
+      Map.get(socket.assigns.graph_config, :geogebra, %{})
+    )
   end
 
   defp maybe_push_graph_event(socket, layer, event_name, payload) do
     if Map.get(socket.assigns.layers, layer) and payload != %{} do
-      push_event(socket, event_name, %{graph: payload})
+      event_payload =
+        if layer == :desmos do
+          payload
+        else
+          %{graph: payload}
+        end
+
+      push_event(socket, event_name, event_payload)
     else
       socket
     end
@@ -466,6 +501,7 @@ defmodule MathVizWeb.MathOrchestratorLive do
       _ -> :unknown
     end
   end
+
   defp normalize_layer(layer) when is_atom(layer), do: layer
 
   defp layer_label(:desmos), do: "Desmos"
@@ -473,8 +509,12 @@ defmodule MathVizWeb.MathOrchestratorLive do
   defp layer_label(:wolfram_steps), do: "Wolfram steps"
   defp layer_label(:lean_proof), do: "Lean proof"
 
-  defp layer_description(:desmos), do: "Interactive graph surface updated from the verified payload."
-  defp layer_description(:geogebra), do: "Secondary graphing lens for the same verified expression."
+  defp layer_description(:desmos),
+    do: "Interactive graph surface updated from the verified payload."
+
+  defp layer_description(:geogebra),
+    do: "Secondary graphing lens for the same verified expression."
+
   defp layer_description(:wolfram_steps), do: "Reserved slot for external step-by-step traces."
   defp layer_description(:lean_proof), do: "Verifier transcript and proof summary."
 end

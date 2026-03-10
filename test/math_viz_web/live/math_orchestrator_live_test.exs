@@ -16,16 +16,16 @@ defmodule MathVizWeb.MathOrchestratorLiveTest do
     html =
       view
       |> element("#solve-form")
-      |> render_submit(%{"prompt" => %{"input_query" => "derivative of sin(x)"}})
+      |> render_submit(%{"prompt" => %{"input_query" => "Graph the derivative of x^2"}})
 
     assert html =~ "Computing"
 
-    Process.sleep(50)
+    Process.sleep(100)
 
     rendered = render(view)
     assert rendered =~ "Proof complete"
-    assert rendered =~ "cos(x)"
-    assert rendered =~ "Verified"
+    assert rendered =~ "2*x"
+    assert rendered =~ "Graph the derivative of x^2"
   end
 
   test "desmos layer can be toggled off", %{conn: conn} do

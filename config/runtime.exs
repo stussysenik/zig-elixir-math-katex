@@ -56,8 +56,9 @@ config :math_viz, :nvidia_nim,
   model: System.get_env("NVIDIA_NIM_MODEL", "moonshotai/kimi-k2-instruct"),
   timeout_ms: String.to_integer(System.get_env("NVIDIA_NIM_TIMEOUT_MS", "15000"))
 
-config :math_viz, :desmos_api_key,
-  System.get_env("DESMOS_API_KEY", Application.get_env(:math_viz, :desmos_api_key))
+config :math_viz,
+       :desmos_api_key,
+       System.get_env("DESMOS_API_KEY", Application.get_env(:math_viz, :desmos_api_key))
 
 # config/runtime.exs is executed for all environments, including
 # during releases. It is executed after compilation and before the
@@ -86,8 +87,7 @@ if System.get_env("PHX_SERVER") do
   config :math_viz, MathVizWeb.Endpoint, server: true
 end
 
-config :math_viz, MathVizWeb.Endpoint,
-  http: [ip: {127, 0, 0, 1}, port: default_port]
+config :math_viz, MathVizWeb.Endpoint, http: [ip: {127, 0, 0, 1}, port: default_port]
 
 if config_env() == :prod do
   # The secret key base is used to sign/encrypt cookies and other secrets.

@@ -3,21 +3,22 @@ defmodule MathViz.Morphisms.NlpRouter.Nim do
 
   @behaviour MathViz.Morphisms.NlpRouter
 
-  alias MathViz.Core.{Query, Symbol}
+  alias MathViz.Contracts
+  alias MathViz.Contracts.AIResponse
+  alias MathViz.Core.Query
 
   @system_prompt """
-  You translate a natural-language math request into JSON for a symbolic visualizer.
-  Return JSON only with keys:
-  statement, expression, latex, graph_expression, notes.
+  You translate a natural-language math request into a strict JSON object for a verified-first symbolic pipeline.
+  Return JSON only. No markdown. No prose outside the JSON object.
   Rules:
-  - expression: concise symbolic output, for example cos(x) or x^2 + 1
-  - latex: valid KaTeX-ready LaTeX string for the main result
-  - graph_expression: a Desmos-ready relation, usually y=<expression>
-  - notes: array of short strings
+  - reasoning_steps: 1-4 short strings that describe the math transformation.
+  - raw_latex: KaTeX-ready LaTeX for the intended result.
+  - sympy_executable: a single SymPy-safe expression using diff, integrate, simplify, expand, factor, sin, cos, tan, exp, log, sqrt, x, y, or z.
+  - desmos_expressions: at least one object with id and latex. Use y=<expression> for graphable results.
   """
 
   @impl true
-  def to_symbol(%Query{text: text}, opts) do
+  def to_contract(%Query{text: text}, opts) do
     nim_config = Application.fetch_env!(:math_viz, :nvidia_nim)
     api_key = nim_config[:api_key]
 
@@ -34,19 +35,24 @@ defmodule MathViz.Morphisms.NlpRouter.Nim do
 
       payload = %{
         model: nim_config[:model],
-        temperature: Keyword.get(opts, :temperature, 0.2),
-        response_format: %{type: "json_object"},
+        temperature: Keyword.get(opts, :temperature, 0.0),
+        response_format: %{
+          type: "json_schema",
+          json_schema: %{
+            name: "math_viz_ai_response",
+            strict: true,
+            schema: Contracts.ai_response_schema()
+          }
+        },
         messages: [
           %{role: "system", content: @system_prompt},
           %{role: "user", content: text}
         ]
       }
 
-      case Req.post(request, url: "/chat/completions", json: payload) do
+      case post_completion(request, payload) do
         {:ok, %{status: status, body: body}} when status in 200..299 ->
-          with {:ok, symbol} <- response_to_symbol(body) do
-            {:ok, %{symbol | source: :nim}}
-          end
+          response_to_contract(body)
 
         {:ok, %{status: status, body: body}} ->
           {:error, {:nim_http_error, status, body}}
@@ -57,41 +63,48 @@ defmodule MathViz.Morphisms.NlpRouter.Nim do
     end
   end
 
-  defp response_to_symbol(%{"choices" => [%{"message" => %{"content" => content}} | _]}) do
+  @spec post_completion(Req.Request.t(), map()) :: {:ok, Req.Response.t()} | {:error, term()}
+  defp post_completion(request, payload) do
+    case Req.post(request, url: "/chat/completions", json: payload) do
+      {:ok, %{status: status}} = success when status in 200..299 ->
+        success
+
+      {:ok, %{status: status}} when status in 400..499 ->
+        fallback_payload = Map.put(payload, :response_format, %{type: "json_object"})
+        Req.post(request, url: "/chat/completions", json: fallback_payload)
+
+      other ->
+        other
+    end
+  end
+
+  @spec response_to_contract(map()) :: {:ok, AIResponse.t()} | {:error, term()}
+  defp response_to_contract(%{"choices" => [%{"message" => %{"content" => content}} | _]}) do
     content
+    |> extract_content()
     |> extract_json()
     |> Jason.decode()
     |> case do
-      {:ok, payload} -> normalize_symbol(payload)
+      {:ok, payload} -> Contracts.parse_ai_response(payload)
       {:error, reason} -> {:error, {:nim_invalid_json, reason}}
     end
   end
 
-  defp response_to_symbol(body), do: {:error, {:nim_unexpected_response, body}}
+  defp response_to_contract(body), do: {:error, {:nim_unexpected_response, body}}
 
-  defp normalize_symbol(payload) do
-    statement = Map.get(payload, "statement") || "NIM result"
-    expression = Map.get(payload, "expression")
-    latex = Map.get(payload, "latex")
-    graph_expression = Map.get(payload, "graph_expression") || expression
-    notes = List.wrap(Map.get(payload, "notes"))
+  defp extract_content(content) when is_binary(content), do: content
 
-    cond do
-      blank?(expression) -> {:error, :nim_missing_expression}
-      blank?(latex) -> {:error, :nim_missing_latex}
-      blank?(graph_expression) -> {:error, :nim_missing_graph_expression}
-      true ->
-        {:ok,
-         %Symbol{
-           statement: statement,
-           expression: expression,
-           latex: latex,
-           graph_expression: graph_expression,
-           raw: payload,
-           notes: Enum.map(notes, &to_string/1)
-         }}
-    end
+  defp extract_content(content) when is_list(content) do
+    content
+    |> Enum.map(fn
+      %{"text" => text} -> text
+      text when is_binary(text) -> text
+      _ -> ""
+    end)
+    |> Enum.join("\n")
   end
+
+  defp extract_content(_content), do: ""
 
   defp extract_json(content) when is_binary(content) do
     case Regex.run(~r/\{.*\}/s, content) do
@@ -99,6 +112,4 @@ defmodule MathViz.Morphisms.NlpRouter.Nim do
       _ -> content
     end
   end
-
-  defp blank?(value), do: is_nil(value) or String.trim(to_string(value)) == ""
 end

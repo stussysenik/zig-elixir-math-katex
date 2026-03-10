@@ -12,6 +12,7 @@ defmodule MathViz.Application do
       {DNSCluster, query: Application.get_env(:math_viz, :dns_cluster_query) || :ignore},
       {Phoenix.PubSub, name: MathViz.PubSub},
       {Task.Supervisor, name: MathViz.TaskSupervisor},
+      MathViz.Engines.SymPyWorker,
       # Start to serve requests, typically the last entry
       MathVizWeb.Endpoint
     ]

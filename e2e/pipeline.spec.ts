@@ -1,14 +1,18 @@
 import { expect, test } from "@playwright/test";
 
-test("submits a prompt and renders verified math", async ({ page }) => {
+test("runs the verified pipeline and updates the Desmos surface", async ({ page }) => {
   await page.goto("/");
 
-  await page.getByTestId("query-input").fill("derivative of sin(x)");
+  await page.getByTestId("query-input").fill("Graph the derivative of x^2");
   await page.getByTestId("submit-query").click();
 
-  await expect(page.getByTestId("status-label")).toContainText(/Computing|Verifying|Rendering/);
+  await expect
+    .poll(async () => page.getByTestId("status-label").getAttribute("data-status"))
+    .not.toBe("idle");
+
   await expect(page.locator("#katex-output .katex-display")).toBeVisible();
   await expect(page.getByTestId("proof-state")).toContainText("accepted");
+  await expect(page.getByTestId("desmos-surface")).toHaveAttribute("data-has-expressions", "true");
 });
 
 test("toggles the Desmos layer without a full page reload", async ({ page }) => {

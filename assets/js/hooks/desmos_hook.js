@@ -2,7 +2,8 @@ import { loadScriptOnce } from "./load_script"
 
 export const DesmosHook = {
   mounted() {
-    this.handleEvent("desmos:update", ({graph}) => this.renderGraph(graph))
+    this.el.dataset.hasExpressions = "false"
+    this.handleEvent("update_graph", payload => this.renderGraph(payload))
     loadScriptOnce("desmos", this.scriptUrl())
       .then(() => this.renderGraph(this.readGraph()))
       .catch(() => {
@@ -55,8 +56,11 @@ export const DesmosHook = {
       return
     }
 
-    if (!graph || !graph.expression) {
+    const expressions = Array.isArray(graph?.expressions) ? graph.expressions : []
+
+    if (expressions.length === 0) {
       calculator.setBlank()
+      this.el.dataset.hasExpressions = "false"
       return
     }
 
@@ -69,6 +73,14 @@ export const DesmosHook = {
       bottom: viewport.ymin ?? -10,
       top: viewport.ymax ?? 10,
     })
-    calculator.setExpression({id: "main", latex: graph.expression})
+
+    expressions.forEach((expression, index) => {
+      calculator.setExpression({
+        id: expression.id || `expr-${index}`,
+        latex: expression.latex,
+      })
+    })
+
+    this.el.dataset.hasExpressions = "true"
   },
 }
