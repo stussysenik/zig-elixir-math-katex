@@ -1,8 +1,13 @@
 # MathViz
 
-Verified-first math orchestration built on Phoenix LiveView.
+Verified-first math orchestration built with Phoenix LiveView, SymPy, KaTeX, and graph hooks.
 
-Computation prompts run through the symbolic pipeline and only unlock graph layers after verification. Theory prompts return a direct text response and skip SymPy, proof, and graph rendering.
+MathViz is a math canvas that treats symbolic work and conceptual questions differently:
+
+- computation prompts go through routing, SymPy, verification, and graph building
+- theory prompts return a text answer and skip the symbolic pipeline entirely
+
+The core product rule is simple: do not render graph layers until verification passes.
 
 ## Screenshots
 
@@ -10,67 +15,62 @@ Computation prompts run through the symbolic pipeline and only unlock graph laye
 | --- | --- |
 | ![Verified solve](docs/screenshots/verified-solve.png) | ![Theory response](docs/screenshots/theory-chat.png) |
 
-The current app ships a greenfield Phoenix 1.8 LiveView surface with:
+## Why This Exists
 
-- a headless-first `/api/solve` endpoint for `curl`, uploads, and JSON clients
-- a shared CLI and web pipeline
-- a dual `N -> S` morphism (`stub` fallback plus NVIDIA NIM adapter)
-- a mode-aware response contract for computation vs theory prompts
-- strict AI, SymPy, and Desmos boundary contracts
-- Ecto embedded-schema validation for headless request/response payloads
-- a supervised Python SymPy Port worker
-- a mocked Lean-shaped verifier gate
-- KaTeX rendering
-- Desmos and GeoGebra layer hooks
-- Playwright and ExUnit coverage for the shipped flow
+Most AI math demos go straight from prompt to prose. MathViz does not.
 
-The design goal is simple: do not render graph layers until verification passes.
+It routes input into a strict contract, executes symbolic work through SymPy, gates graph output behind a verifier boundary, and keeps a headless API and LiveView UI on the same pipeline. When a prompt is conceptual instead of computational, it answers in chat mode instead of forcing nonsense through a graphing path.
+
+## How It Works
+
+### Computation flow
+
+`LiveView / API / CLI -> Solve -> Pipeline -> NlpRouter -> SymPyWorker -> Verifier -> GraphBuilder`
+
+### Theory flow
+
+`LiveView / API / CLI -> Solve -> Pipeline -> NlpRouter -> chat response`
+
+### Main pieces
+
+- `MathViz.Pipeline.run/2` is the shared orchestration entrypoint
+- `MathViz.Solve.run/2` is the validated headless service used by web, API, and CLI
+- `MathViz.Contracts` validates AI, SymPy, and graph boundary payloads
+- `MathViz.Morphisms.NlpRouter.Stub` provides deterministic local routing
+- `MathViz.Morphisms.NlpRouter.Nim` uses NVIDIA NIM through an OpenAI-compatible endpoint
+- `MathViz.Engines.SymPyWorker` runs symbolic execution through a long-lived Python Port
+- `MathViz.Morphisms.Verifier.Mock` hard-gates graph rendering behind a verifier boundary
+- `MathViz.Morphisms.GraphBuilder.Default` produces Desmos and GeoGebra payloads from verified symbolic state
 
 ## What Ships Today
 
-### Core pipeline
+- Phoenix 1.8 LiveView UI with a sparse bottom-docked command bar
+- Native LiveView image uploads with drag-and-drop and shared 5MB validation
+- KaTeX rendering for symbolic output
+- Lazy-loaded Desmos and GeoGebra hooks
+- Headless `POST /api/solve` endpoint for JSON and multipart clients
+- CLI entrypoint via `mix math.prove "..."` using the same pipeline
+- Theory/computation mode split in the response contract
+- ExUnit and Playwright coverage for the main shipped flows
 
-- `MathViz.Pipeline.run/2` is the single entrypoint for web and CLI flows.
-- `MathViz.Solve.run/2` is the validated headless service used by the API, LiveView, and CLI.
-- `mix math.prove "derivative of sin(x)"` runs the same orchestration as the LiveView.
-- `MathViz.Contracts` validates the AI response shape, SymPy request/response, and the Desmos payload contract.
-- `MathViz.Morphisms.NlpRouter.Stub` handles deterministic local parsing.
-- `MathViz.Morphisms.NlpRouter.Nim` calls NVIDIA NIM with an OpenAI-compatible `chat/completions` request, supports multimodal `text + image_url` content parts, and requests JSON-schema output first.
-- `MathViz.Engines.SymPyWorker` executes the symbolic step through a long-lived Python Port.
-- `MathViz.Morphisms.Verifier.Mock` simulates the Lean verification boundary and hard-gates graph rendering.
-- `MathViz.Morphisms.GraphBuilder.Default` produces Desmos and GeoGebra payloads from the verified symbolic state.
+## Stack
 
-### Web UI
+- Backend: Elixir `~> 1.15`, Phoenix `1.8.4`, Phoenix LiveView `~> 1.1.0`, Bandit
+- Validation and integration: Ecto embedded schemas, `Req`, `Jason`
+- Symbolic engine: Python + SymPy over a supervised Port
+- Frontend: server-rendered LiveView, plain JS hooks, Tailwind CSS v4, KaTeX
+- Browser automation: Playwright
+- Optional dev shell: Nix via `flake.nix`
 
-- `MathOrchestratorLive` owns the pipeline state, conditional output rendering, and graph tab state.
-- Theory prompts render as text-only responses and leave the graph canvas empty.
-- KaTeX output is rendered via a LiveView hook.
-- Desmos and GeoGebra are loaded lazily from the browser and only receive payloads after verification succeeds.
-- The default web shell is intentionally sparse: a blank canvas, a bottom command bar, and output that appears only when data exists.
-- The command bar now uses native LiveView uploads with drag-and-drop, picker uploads, and a shared 5MB image validation path.
+## Quick Start
 
-### Headless API
-
-- `POST /api/solve` is the browser-independent entrypoint.
-- It accepts:
-  - `application/json` with `query`, optional `image_base64`, optional `image_mime`
-  - `multipart/form-data` with `query` and optional `image`
-- It returns one normalized JSON payload with:
-  - `mode` (`computation` or `chat`)
-  - request metadata
-  - adapter used
-  - `chat_reply` plus `chat_steps` for theory prompts
-  - symbolic output, proof state, and graph payloads for computation prompts
-  - timings
-
-## Setup
-
-### Local prerequisites
+### Prerequisites
 
 - Elixir / Erlang
 - Bun
-- Node-compatible browser tooling for Playwright
-- Optional: `nix develop` via `flake.nix`
+- Python 3
+- Chromium-compatible tooling for Playwright
+- Optional: `nix develop`
 
 ### Install
 
@@ -78,7 +78,7 @@ The design goal is simple: do not render graph layers until verification passes.
 mix setup
 ```
 
-`mix setup` creates a local `.venv`, installs `requirements.txt` into it, then builds the assets.
+`mix setup` creates `.venv`, installs `requirements.txt`, installs JS dependencies, and builds assets.
 
 ### Environment
 
@@ -97,13 +97,11 @@ Supported variables:
 - `NVIDIA_NIM_TIMEOUT_MS`
 - `DESMOS_API_KEY`
 
-Behavior:
+Routing behavior:
 
-- `stub`: always uses the deterministic parser
-- `nim`: always uses NVIDIA NIM and errors if the key is missing
-- `dual`: tries NVIDIA NIM first, then falls back to the stub adapter
-- `NVIDIA_NIM_MODEL` defaults to `moonshotai/kimi-k2-5` for multimodal requests
-- `DESMOS_API_KEY` defaults to Desmos' documented demo key for development
+- `stub`: always use deterministic local routing
+- `nim`: always use NVIDIA NIM and fail if the key is missing
+- `dual`: try NVIDIA NIM first, then fall back to the stub router
 
 ## Run
 
@@ -113,15 +111,18 @@ Behavior:
 mix phx.server
 ```
 
-Open [http://localhost:4000](http://localhost:4000).
+Open `http://localhost:4000`.
 
 ### CLI
 
 ```bash
-mix math.prove "derivative of sin(x)"
+mix math.prove "Graph the derivative of x^2"
+mix math.prove "What is an integral?"
 ```
 
-### Headless text solve
+### Headless API
+
+Text solve:
 
 ```bash
 curl -sS -X POST http://127.0.0.1:4000/api/solve \
@@ -129,7 +130,15 @@ curl -sS -X POST http://127.0.0.1:4000/api/solve \
   -d '{"query":"Graph the derivative of x^2"}'
 ```
 
-### Headless image solve
+Theory solve:
+
+```bash
+curl -sS -X POST http://127.0.0.1:4000/api/solve \
+  -H 'content-type: application/json' \
+  -d '{"query":"What is an integral?"}'
+```
+
+Multipart image solve:
 
 ```bash
 curl -sS -X POST http://127.0.0.1:4000/api/solve \
@@ -137,7 +146,7 @@ curl -sS -X POST http://127.0.0.1:4000/api/solve \
   -F 'image=@/absolute/path/to/whiteboard.png;type=image/png'
 ```
 
-### Headless base64 image solve
+Base64 image solve:
 
 ```bash
 curl -sS -X POST http://127.0.0.1:4000/api/solve \
@@ -145,30 +154,18 @@ curl -sS -X POST http://127.0.0.1:4000/api/solve \
   -d '{"query":"Solve the equation in the image","image_mime":"image/png","image_base64":"<BASE64_HERE>"}'
 ```
 
-## Test And Build
+## API Response Shape
 
-### Elixir tests
+`POST /api/solve` returns one normalized payload with:
 
-```bash
-mix test
-```
+- `mode`: `computation` or `chat`
+- request metadata
+- adapter used
+- `chat_reply` and `chat_steps` for theory prompts
+- symbolic output, proof state, and graph payloads for computation prompts
+- timings
 
-### Assets
-
-```bash
-mix assets.build
-```
-
-### Browser tests
-
-```bash
-bun run playwright:install
-bun run test:e2e
-```
-
-## Prompt Smoke Tests
-
-Use these as original, engineering-math-style prompts for quick verification:
+## Smoke Prompts
 
 - `Graph the derivative of x^2`
 - `What is an integral?`
@@ -177,9 +174,24 @@ Use these as original, engineering-math-style prompts for quick verification:
 - `Expand the Fourier series of x on [-pi, pi]`
 - `Given the uploaded whiteboard image, transcribe the equation and solve for the derivative`
 
+## Testing
+
+Run the full local verification pass:
+
+```bash
+mix precommit
+```
+
+Run browser tests directly:
+
+```bash
+bun run playwright:install
+bun run test:e2e
+```
+
 ## Repo Notes
 
-- `PROGRESS.md` tracks the implementation checkpoints and verification steps.
-- `flake.nix` provides a reproducible shell for Elixir, Bun, Python, SymPy, and `elan`.
-- The current verifier is intentionally mocked; Lean is still the next major integration.
-- Vision ingest is now wired through LiveView uploads and the headless API, but human-in-the-loop OCR correction, persistence, and exports are still not in this version.
+- `PROGRESS.md` tracks implementation checkpoints
+- `flake.nix` provides a reproducible shell for Elixir, Bun, Python, SymPy, and `elan`
+- the verifier is intentionally mocked today; Lean integration is still future work
+- vision ingest is wired through LiveView uploads and the headless API, but persistence and export flows are not in this version
