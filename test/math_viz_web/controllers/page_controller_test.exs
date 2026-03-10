@@ -3,6 +3,9 @@ defmodule MathVizWeb.PageControllerTest do
 
   test "GET /", %{conn: conn} do
     conn = get(conn, ~p"/")
-    assert html_response(conn, 200) =~ "Verified-first mathematics over LiveView"
+
+    html = html_response(conn, 200)
+    assert html =~ "MathViz"
+    assert html =~ "Enter an equation or natural language query..."
   end
 end

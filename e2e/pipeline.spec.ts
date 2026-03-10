@@ -1,6 +1,16 @@
 import { expect, test } from "@playwright/test";
 
-test("runs the verified pipeline and updates the Desmos surface", async ({ page }) => {
+test("keeps the default screen blank except for the command bar", async ({ page }) => {
+  await page.goto("/");
+
+  await expect(page.getByTestId("query-input")).toBeVisible();
+  await expect(page.locator("#katex-output")).toHaveCount(0);
+  await expect(page.locator("#desmos-surface")).toHaveCount(0);
+  await expect(page.locator("#geogebra-surface")).toHaveCount(0);
+});
+
+test("runs the verified pipeline and switches graph tabs", async ({ page }) => {
+  await page.setViewportSize({ width: 393, height: 852 });
   await page.goto("/");
 
   await page.getByTestId("query-input").fill("Graph the derivative of x^2");
@@ -12,14 +22,11 @@ test("runs the verified pipeline and updates the Desmos surface", async ({ page 
 
   await expect(page.locator("#katex-output .katex-display")).toBeVisible();
   await expect(page.getByTestId("proof-state")).toContainText("accepted");
+  await expect(page.getByTestId("graph-tabs")).toBeVisible();
   await expect(page.getByTestId("desmos-surface")).toHaveAttribute("data-has-expressions", "true");
-});
+  await expect(page.locator("#geogebra-surface")).toHaveCount(0);
 
-test("toggles the Desmos layer without a full page reload", async ({ page }) => {
-  await page.goto("/");
-
-  await expect(page.getByTestId("desmos-surface")).toBeVisible();
-  await page.getByText("Engine", { exact: true }).click();
-  await page.getByTestId("toggle-desmos").click();
-  await expect(page.getByTestId("desmos-surface")).toHaveCount(0);
+  await page.getByTestId("graph-tab-geogebra").click();
+  await expect(page.getByTestId("geogebra-surface")).toBeVisible();
+  await expect(page.locator("#desmos-surface")).toHaveCount(0);
 });

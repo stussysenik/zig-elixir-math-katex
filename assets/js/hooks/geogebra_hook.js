@@ -6,7 +6,7 @@ export const GeoGebraHook = {
     loadScriptOnce("geogebra", "https://www.geogebra.org/apps/deployggb.js")
       .then(() => this.renderGraph(this.readGraph()))
       .catch(() => {
-        this.el.innerHTML = "<div class=\"flex h-full items-center justify-center text-sm text-stone-500\">GeoGebra failed to load.</div>"
+        this.renderShell("bg-stone-100")
       })
   },
 
@@ -24,12 +24,12 @@ export const GeoGebraHook = {
 
   renderGraph(graph) {
     if (!graph || !graph.command) {
-      this.el.innerHTML = "<div class=\"flex h-full items-center justify-center text-sm text-stone-500\">GeoGebra is waiting for a verified graph payload.</div>"
+      this.renderShell("bg-stone-50")
       return
     }
 
     if (!window.GGBApplet) {
-      this.el.innerHTML = "<div class=\"flex h-full items-center justify-center text-sm text-stone-500\">GeoGebra is loading...</div>"
+      this.renderShell("animate-pulse bg-stone-100")
       return
     }
 
@@ -57,8 +57,12 @@ export const GeoGebraHook = {
         const api = applet.getAppletObject?.()
         api?.evalCommand(graph.command)
       } catch (_error) {
-        this.el.innerHTML = "<div class=\"flex h-full items-center justify-center text-sm text-stone-500\">GeoGebra could not evaluate the verified command.</div>"
+        this.renderShell("bg-stone-100")
       }
     }, 400)
+  },
+
+  renderShell(tone) {
+    this.el.innerHTML = `<div class="h-full w-full ${tone}"></div>`
   },
 }

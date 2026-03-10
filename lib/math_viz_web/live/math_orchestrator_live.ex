@@ -3,7 +3,7 @@ defmodule MathVizWeb.MathOrchestratorLive do
 
   alias MathViz.Pipeline
 
-  @layers [:desmos, :geogebra, :wolfram_steps, :lean_proof]
+  @graph_engines [:desmos, :geogebra]
 
   @impl true
   def mount(_params, _session, socket) do
@@ -32,16 +32,16 @@ defmodule MathVizWeb.MathOrchestratorLive do
       {:noreply,
        socket
        |> clear_flash()
-       |> assign(reset_assigns(socket.assigns.layers, raw_query, request_id, task.ref))}
+       |> assign(reset_assigns(raw_query, request_id, task.ref))}
     end
   end
 
-  def handle_event("toggle_layer", %{"layer" => layer_name}, socket) do
-    layer = normalize_layer(layer_name)
+  def handle_event("set_graph_engine", %{"engine" => engine_name}, socket) do
+    engine = normalize_graph_engine(engine_name)
 
     socket =
-      if layer in @layers do
-        update(socket, :layers, fn layers -> Map.update!(layers, layer, &(!&1)) end)
+      if engine in @graph_engines do
+        assign(socket, active_graph_engine: engine)
       else
         socket
       end
@@ -106,238 +106,215 @@ defmodule MathVizWeb.MathOrchestratorLive do
   def render(assigns) do
     ~H"""
     <Layouts.app flash={@flash}>
-      <main class="min-h-screen bg-white text-stone-900">
-        <section class="mx-auto max-w-3xl px-6 py-12 lg:px-0">
-          <header class="sticky top-0 z-20 -mx-6 mb-12 border-b border-stone-200 bg-white/95 px-6 py-4 backdrop-blur lg:mx-0 lg:px-0">
-            <div class="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-              <div class="space-y-1">
-                <p class="text-[0.65rem] font-semibold uppercase tracking-[0.35em] text-stone-500">
-                  Verified-first mathematics over LiveView
-                </p>
-                <p class="max-w-xl text-sm leading-6 text-stone-600">
-                  The math should feel like a document. The engine should feel optional.
-                </p>
-              </div>
+      <main class="min-h-screen bg-white text-stone-950">
+        <section class="mx-auto flex min-h-screen max-w-3xl flex-col px-4 sm:px-6 lg:px-0">
+          <header class="flex items-center justify-between py-4">
+            <p class="text-[0.65rem] font-semibold uppercase tracking-[0.32em] text-stone-500">
+              MathViz
+            </p>
 
-              <div class="flex items-start gap-4 sm:items-center">
-                <div class="text-right">
-                  <p class="text-[0.65rem] uppercase tracking-[0.28em] text-stone-400">Status</p>
-                  <p
-                    class="mt-1 font-mono text-sm uppercase tracking-[0.18em] text-stone-700"
-                    data-testid="status-label"
-                    data-status={@status}
-                  >
-                    {format_status(@status)}
-                  </p>
-                </div>
+            <details class="relative text-xs text-stone-500">
+              <summary class="cursor-pointer list-none rounded-full border border-stone-200 px-3 py-1.5 font-medium text-stone-700 marker:hidden">
+                Engine
+              </summary>
 
-                <details class="group mt-0.5 text-sm text-stone-600">
-                  <summary class="cursor-pointer list-none font-medium text-stone-900 marker:hidden">
-                    Engine
-                  </summary>
-                  <div class="mt-4 w-full min-w-[18rem] border-l border-stone-200 pl-4">
-                    <div class="grid gap-2 text-xs uppercase tracking-[0.2em] text-stone-500 sm:grid-cols-4">
-                      <div>
-                        <p>N -> S</p>
-                        <p class="mt-1 text-base font-medium tracking-normal text-stone-900">
-                          {Map.get(@timings, :nlp_ms, 0)} ms
-                        </p>
-                      </div>
-                      <div>
-                        <p>SymPy</p>
-                        <p class="mt-1 text-base font-medium tracking-normal text-stone-900">
-                          {Map.get(@timings, :sympy_ms, 0)} ms
-                        </p>
-                      </div>
-                      <div>
-                        <p>S -> L</p>
-                        <p class="mt-1 text-base font-medium tracking-normal text-stone-900">
-                          {Map.get(@timings, :verify_ms, 0)} ms
-                        </p>
-                      </div>
-                      <div>
-                        <p>S -> G</p>
-                        <p class="mt-1 text-base font-medium tracking-normal text-stone-900">
-                          {Map.get(@timings, :graph_ms, 0)} ms
-                        </p>
-                      </div>
+              <div class="absolute right-0 mt-3 w-[18rem] rounded-2xl border border-stone-200 bg-white p-4 shadow-lg shadow-stone-900/5">
+                <div class="space-y-3">
+                  <div class="flex items-center justify-between">
+                    <span class="uppercase tracking-[0.22em] text-stone-400">Adapter</span>
+                    <span class="font-mono text-stone-700">
+                      {String.upcase(to_string(@adapter || :stub))}
+                    </span>
+                  </div>
+
+                  <div class="grid grid-cols-2 gap-3">
+                    <div class="rounded-xl bg-stone-50 p-3">
+                      <p class="uppercase tracking-[0.2em] text-stone-400">N -> S</p>
+                      <p class="mt-1 font-mono text-stone-700">{Map.get(@timings, :nlp_ms, 0)} ms</p>
                     </div>
-
-                    <div class="mt-5 space-y-2" data-testid="layer-toggles">
-                      <div class="flex items-center justify-between border-b border-stone-100 pb-2 text-xs uppercase tracking-[0.2em] text-stone-500">
-                        <span>Adapter {String.upcase(to_string(@adapter || :stub))}</span>
-                        <span>{if @is_verified, do: "verified", else: "blocked"}</span>
-                      </div>
-
-                      <%= for {layer, enabled?} <- @layers do %>
-                        <button
-                          type="button"
-                          phx-click="toggle_layer"
-                          phx-value-layer={layer}
-                          class="flex w-full items-center justify-between py-2 text-left transition hover:text-stone-900"
-                          data-testid={"toggle-#{layer}"}
-                        >
-                          <span>
-                            <span class="block text-xs font-semibold uppercase tracking-[0.18em] text-stone-700">
-                              {layer_label(layer)}
-                            </span>
-                            <span class="mt-1 block text-xs leading-5 text-stone-500">
-                              {layer_description(layer)}
-                            </span>
-                          </span>
-                          <span class="font-mono text-xs uppercase tracking-[0.18em] text-stone-500">
-                            {if enabled?, do: "On", else: "Off"}
-                          </span>
-                        </button>
-                      <% end %>
+                    <div class="rounded-xl bg-stone-50 p-3">
+                      <p class="uppercase tracking-[0.2em] text-stone-400">SymPy</p>
+                      <p class="mt-1 font-mono text-stone-700">
+                        {Map.get(@timings, :sympy_ms, 0)} ms
+                      </p>
+                    </div>
+                    <div class="rounded-xl bg-stone-50 p-3">
+                      <p class="uppercase tracking-[0.2em] text-stone-400">S -> L</p>
+                      <p class="mt-1 font-mono text-stone-700">
+                        {Map.get(@timings, :verify_ms, 0)} ms
+                      </p>
+                    </div>
+                    <div class="rounded-xl bg-stone-50 p-3">
+                      <p class="uppercase tracking-[0.2em] text-stone-400">S -> G</p>
+                      <p class="mt-1 font-mono text-stone-700">
+                        {Map.get(@timings, :graph_ms, 0)} ms
+                      </p>
                     </div>
                   </div>
-                </details>
+
+                  <div :if={@lean_proof_state} class="rounded-xl border border-stone-200 p-3">
+                    <p class="uppercase tracking-[0.2em] text-stone-400">Proof</p>
+                    <p class="mt-2 font-mono text-stone-700">{@lean_proof_state}</p>
+                  </div>
+
+                  <p :if={@error_message} class="text-rose-700">{@error_message}</p>
+                </div>
               </div>
-            </div>
+            </details>
           </header>
 
-          <div class="space-y-16">
-            <section>
-              <p class="text-[0.65rem] font-semibold uppercase tracking-[0.35em] text-stone-500">
-                Natural language input
-              </p>
-              <h1 class="mt-3 font-serif text-5xl leading-[1.02] tracking-tight text-balance text-stone-900 sm:text-6xl">
-                One prompt, one formal gate, three synchronized layers.
-              </h1>
-              <p class="mt-5 max-w-2xl text-base leading-8 text-stone-600">
-                Phoenix coordinates the natural-language morphism, the verifier boundary, and the graph payloads. The user should mostly see beautiful math, not the machinery.
-              </p>
-
-              <.form for={@form} id="solve-form" phx-submit="solve" class="mt-10 space-y-5">
-                <.input
-                  field={@form[:input_query]}
-                  type="textarea"
-                  label="Prompt"
-                  rows="5"
-                  class="w-full min-h-[120px] resize-y rounded-lg border border-gray-300 p-4 text-lg text-stone-900 shadow-sm focus:border-slate-500 focus:ring-slate-500"
-                  placeholder="Prove the derivative of sin(x), then show the verified graph."
-                  data-testid="query-input"
-                />
-                <div class="flex flex-col gap-3 sm:flex-row sm:items-center">
-                  <button
-                    type="submit"
-                    class="inline-flex w-full items-center justify-center rounded-md border border-transparent bg-slate-900 px-6 py-3 text-base font-medium text-white transition-colors hover:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-slate-900 focus:ring-offset-2 sm:w-auto"
-                    phx-disable-with="Translating..."
-                    data-testid="submit-query"
+          <div class="flex-1 pb-40 pt-6">
+            <div class="space-y-12 sm:space-y-14">
+              <section :if={has_output?(@sympy_ast, @error_message)} class="space-y-5">
+                <div class="flex items-center gap-3">
+                  <span
+                    class={status_dot_classes(@status, @is_verified, @error_message)}
+                    data-testid="status-indicator"
                   >
-                    Run verified pipeline
-                  </button>
-                  <p class="text-sm text-stone-500">
-                    `.env.local` switches to NVIDIA NIM automatically when a key is present.
-                  </p>
+                  </span>
+                  <span data-testid="status-label" data-status={@status} class="sr-only">
+                    {format_status(@status)}
+                  </span>
                 </div>
-              </.form>
-            </section>
 
-            <section class="prose prose-stone prose-lg max-w-none">
-              <p class="not-prose text-[0.65rem] font-semibold uppercase tracking-[0.35em] text-stone-500">
-                Verified output
-              </p>
+                <div :if={@sympy_ast} class="space-y-4">
+                  <div
+                    id="katex-output"
+                    phx-hook="MathRender"
+                    phx-update="ignore"
+                    data-testid="katex-output"
+                    data-latex={@output_latex}
+                    class="min-h-0 py-1"
+                  >
+                  </div>
 
-              <div
-                id="katex-output"
-                phx-hook="MathRender"
-                phx-update="ignore"
-                data-testid="katex-output"
-                data-latex={@output_latex}
-                class="min-h-16 py-4"
-              >
-              </div>
+                  <div class="border-l border-stone-200 pl-4">
+                    <p class="font-serif text-2xl leading-tight text-stone-950">
+                      {@sympy_ast.statement}
+                    </p>
+                    <p class="mt-3 font-mono text-sm text-stone-600">{@sympy_ast.expression}</p>
 
-              <%= if @sympy_ast do %>
-                <div class="not-prose mt-6 border-l border-stone-200 pl-5">
-                  <p class="font-serif text-2xl text-stone-900">{@sympy_ast.statement}</p>
-                  <p class="mt-3 font-mono text-sm text-stone-600">{@sympy_ast.expression}</p>
-
-                  <%= if @sympy_ast.notes != [] do %>
-                    <ul class="mt-4 space-y-2 text-sm leading-6 text-stone-500">
+                    <ul
+                      :if={@sympy_ast.notes != []}
+                      class="mt-4 space-y-2 text-sm leading-6 text-stone-500"
+                    >
                       <%= for note <- @sympy_ast.notes do %>
                         <li>{note}</li>
                       <% end %>
                     </ul>
-                  <% end %>
+                  </div>
                 </div>
-              <% end %>
 
-              <%= if @error_message do %>
-                <p class="not-prose mt-6 text-sm leading-6 text-rose-700">
+                <p :if={@error_message} class="text-sm leading-6 text-rose-700">
                   {@error_message}
                 </p>
-              <% end %>
-            </section>
+              </section>
 
-            <%= if @layers.lean_proof do %>
-              <section>
-                <div class="mb-3 flex items-center justify-between gap-4">
-                  <p class="text-[0.65rem] font-semibold uppercase tracking-[0.35em] text-stone-500">
-                    Proof boundary
+              <section :if={has_proof?(@lean_proof_state)} class="space-y-3">
+                <div class="flex items-center justify-between gap-4">
+                  <p class="text-[0.65rem] font-semibold uppercase tracking-[0.28em] text-stone-400">
+                    Proof
                   </p>
-                  <span class="font-mono text-[0.7rem] uppercase tracking-[0.24em] text-stone-500">
-                    {@lean_proof_state || "Idle"}
+                  <span class="font-mono text-[0.7rem] uppercase tracking-[0.24em] text-stone-400">
+                    {@lean_proof_state}
                   </span>
                 </div>
+
                 <pre
-                  class="overflow-x-auto border-l border-stone-200 pl-5 font-mono text-xs leading-7 text-stone-600"
+                  class="overflow-x-auto border-l border-stone-200 pl-4 font-mono text-xs leading-7 text-stone-600"
                   data-testid="proof-state"
                 ><%= @proof_summary %></pre>
               </section>
-            <% end %>
 
-            <%= if @layers.desmos do %>
-              <section>
-                <div class="mb-5 flex items-center justify-between gap-4">
-                  <div>
-                    <p class="text-[0.65rem] font-semibold uppercase tracking-[0.35em] text-stone-500">
-                      Graph layer
-                    </p>
-                    <h2 class="mt-2 font-serif text-3xl text-stone-900">Desmos</h2>
+              <section :if={has_graph?(@graph_config)} class="space-y-4">
+                <div class="flex items-center justify-between gap-4">
+                  <div
+                    class="inline-flex items-center rounded-full border border-stone-200 bg-stone-50 p-1"
+                    data-testid="graph-tabs"
+                  >
+                    <%= for engine <- available_graph_engines(@graph_config) do %>
+                      <button
+                        type="button"
+                        phx-click="set_graph_engine"
+                        phx-value-engine={engine}
+                        class={[
+                          "rounded-full px-3 py-1.5 text-sm font-medium transition-colors",
+                          @active_graph_engine == engine && "bg-white text-stone-950 shadow-sm",
+                          @active_graph_engine != engine && "text-stone-500 hover:text-stone-900"
+                        ]}
+                        data-testid={"graph-tab-#{engine}"}
+                      >
+                        {graph_engine_label(engine)}
+                      </button>
+                    <% end %>
                   </div>
-                  <span class="font-mono text-[0.7rem] uppercase tracking-[0.24em] text-stone-500">
-                    {if @is_verified, do: "live", else: "blocked"}
+
+                  <span class="text-[0.65rem] uppercase tracking-[0.28em] text-stone-400">
+                    {graph_engine_label(@active_graph_engine)}
                   </span>
                 </div>
-                <div
-                  id="desmos-surface"
-                  phx-hook="DesmosHook"
-                  phx-update="ignore"
-                  data-testid="desmos-surface"
-                  data-config={@desmos_json}
-                  class="w-full aspect-video min-h-[400px] overflow-hidden rounded-xl border border-gray-200 bg-gray-50 shadow-inner"
-                >
-                </div>
-              </section>
-            <% end %>
 
-            <%= if @layers.geogebra do %>
-              <section>
-                <div class="mb-5 flex items-center justify-between gap-4">
-                  <div>
-                    <p class="text-[0.65rem] font-semibold uppercase tracking-[0.35em] text-stone-500">
-                      Graph layer
-                    </p>
-                    <h2 class="mt-2 font-serif text-3xl text-stone-900">GeoGebra</h2>
+                <div class="-mx-4 overflow-hidden sm:mx-0">
+                  <div
+                    :if={
+                      @active_graph_engine == :desmos and has_graph_payload?(@graph_config, :desmos)
+                    }
+                    id="desmos-surface"
+                    phx-hook="DesmosHook"
+                    phx-update="ignore"
+                    data-testid="desmos-surface"
+                    data-config={@desmos_json}
+                    class="h-[60vh] min-h-[22rem] w-full overflow-hidden rounded-none border-y border-stone-200 bg-stone-50 sm:rounded-2xl sm:border"
+                  >
                   </div>
-                  <span class="font-mono text-[0.7rem] uppercase tracking-[0.24em] text-stone-500">
-                    v1
-                  </span>
-                </div>
-                <div
-                  id="geogebra-surface"
-                  phx-hook="GeoGebraHook"
-                  phx-update="ignore"
-                  data-testid="geogebra-surface"
-                  data-config={@geogebra_json}
-                  class="w-full aspect-video min-h-[400px] overflow-hidden rounded-xl border border-gray-200 bg-gray-50 shadow-inner"
-                >
+
+                  <div
+                    :if={
+                      @active_graph_engine == :geogebra and
+                        has_graph_payload?(@graph_config, :geogebra)
+                    }
+                    id="geogebra-surface"
+                    phx-hook="GeoGebraHook"
+                    phx-update="ignore"
+                    data-testid="geogebra-surface"
+                    data-config={@geogebra_json}
+                    class="h-[60vh] min-h-[22rem] w-full overflow-hidden rounded-none border-y border-stone-200 bg-stone-50 sm:rounded-2xl sm:border"
+                  >
+                  </div>
                 </div>
               </section>
-            <% end %>
+            </div>
+          </div>
+
+          <div class="sticky bottom-0 z-30 mt-auto pb-[max(env(safe-area-inset-bottom),1rem)]">
+            <div class="-mx-4 bg-white/90 px-4 pt-4 backdrop-blur sm:mx-0 sm:bg-transparent sm:px-0">
+              <.form
+                for={@form}
+                id="solve-form"
+                phx-submit="solve"
+                class="mx-auto max-w-2xl rounded-[1.5rem] border border-stone-200 bg-white/95 p-3 shadow-lg shadow-stone-900/5"
+              >
+                <textarea
+                  id={@form[:input_query].id}
+                  name={@form[:input_query].name}
+                  rows="1"
+                  class="min-h-[120px] w-full resize-none border-0 bg-transparent px-1 py-2 text-base text-stone-900 outline-none ring-0 placeholder:text-stone-400 focus:outline-none focus:ring-0"
+                  placeholder="Enter an equation or natural language query..."
+                  data-testid="query-input"
+                ><%= @form[:input_query].value %></textarea>
+
+                <div class="mt-3 flex items-center justify-end">
+                  <button
+                    type="submit"
+                    class="inline-flex items-center rounded-full border border-stone-900 bg-stone-900 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-stone-800"
+                    phx-disable-with="Sending..."
+                    data-testid="submit-query"
+                  >
+                    Submit
+                  </button>
+                </div>
+              </.form>
+            </div>
           </div>
         </section>
       </main>
@@ -361,18 +338,13 @@ defmodule MathVizWeb.MathOrchestratorLive do
       form: to_form(%{"input_query" => ""}, as: :prompt),
       request_id: 0,
       current_task_ref: nil,
+      active_graph_engine: :desmos,
       desmos_json: "{}",
-      geogebra_json: "{}",
-      layers: %{
-        desmos: true,
-        geogebra: true,
-        wolfram_steps: false,
-        lean_proof: true
-      }
+      geogebra_json: "{}"
     }
   end
 
-  defp reset_assigns(layers, query, request_id, task_ref) do
+  defp reset_assigns(query, request_id, task_ref) do
     default_assigns()
     |> Map.merge(%{
       input_query: query,
@@ -380,7 +352,7 @@ defmodule MathVizWeb.MathOrchestratorLive do
       request_id: request_id,
       current_task_ref: task_ref,
       proof_summary: "Preparing the natural-language morphism.",
-      layers: layers,
+      active_graph_engine: :desmos,
       form: to_form(%{"input_query" => query}, as: :prompt)
     })
   end
@@ -450,30 +422,25 @@ defmodule MathVizWeb.MathOrchestratorLive do
   defp maybe_push_graph_events(socket) do
     socket
     |> maybe_push_graph_event(
-      :desmos,
       "update_graph",
-      Map.get(socket.assigns.graph_config, :desmos, %{})
+      Map.get(socket.assigns.graph_config, :desmos, %{}),
+      :desmos
     )
     |> maybe_push_graph_event(
-      :geogebra,
       "geogebra:update",
-      Map.get(socket.assigns.graph_config, :geogebra, %{})
+      Map.get(socket.assigns.graph_config, :geogebra, %{}),
+      :geogebra
     )
   end
 
-  defp maybe_push_graph_event(socket, layer, event_name, payload) do
-    if Map.get(socket.assigns.layers, layer) and payload != %{} do
-      event_payload =
-        if layer == :desmos do
-          payload
-        else
-          %{graph: payload}
-        end
+  defp maybe_push_graph_event(socket, _event_name, %{}, _engine), do: socket
 
-      push_event(socket, event_name, event_payload)
-    else
-      socket
-    end
+  defp maybe_push_graph_event(socket, event_name, payload, :desmos) do
+    push_event(socket, event_name, payload)
+  end
+
+  defp maybe_push_graph_event(socket, event_name, payload, :geogebra) do
+    push_event(socket, event_name, %{graph: payload})
   end
 
   defp format_status(:idle), do: "Idle"
@@ -486,29 +453,53 @@ defmodule MathVizWeb.MathOrchestratorLive do
   defp format_error(reason) when is_binary(reason), do: reason
   defp format_error(reason), do: inspect(reason)
 
-  defp normalize_layer(layer) when is_binary(layer) do
-    case layer do
+  defp normalize_graph_engine(engine) when is_binary(engine) do
+    case engine do
       "desmos" -> :desmos
       "geogebra" -> :geogebra
-      "wolfram_steps" -> :wolfram_steps
-      "lean_proof" -> :lean_proof
       _ -> :unknown
     end
   end
 
-  defp normalize_layer(layer) when is_atom(layer), do: layer
+  defp normalize_graph_engine(engine) when is_atom(engine), do: engine
 
-  defp layer_label(:desmos), do: "Desmos"
-  defp layer_label(:geogebra), do: "GeoGebra"
-  defp layer_label(:wolfram_steps), do: "Wolfram steps"
-  defp layer_label(:lean_proof), do: "Lean proof"
+  defp graph_engine_label(:desmos), do: "Desmos"
+  defp graph_engine_label(:geogebra), do: "GeoGebra"
+  defp graph_engine_label(other), do: other |> to_string() |> String.capitalize()
 
-  defp layer_description(:desmos),
-    do: "Interactive graph surface updated from the verified payload."
+  defp has_output?(sympy_ast, error_message),
+    do: not is_nil(sympy_ast) or not is_nil(error_message)
 
-  defp layer_description(:geogebra),
-    do: "Secondary graphing lens for the same verified expression."
+  defp has_proof?(lean_proof_state), do: is_binary(lean_proof_state) and lean_proof_state != ""
 
-  defp layer_description(:wolfram_steps), do: "Reserved slot for external step-by-step traces."
-  defp layer_description(:lean_proof), do: "Verifier transcript and proof summary."
+  defp has_graph?(graph_config) when is_map(graph_config) do
+    has_graph_payload?(graph_config, :desmos) or has_graph_payload?(graph_config, :geogebra)
+  end
+
+  defp has_graph_payload?(graph_config, engine) when is_map(graph_config) do
+    graph_config
+    |> Map.get(engine, %{})
+    |> case do
+      payload when is_map(payload) -> payload != %{}
+      _ -> false
+    end
+  end
+
+  defp available_graph_engines(graph_config) do
+    Enum.filter(@graph_engines, &has_graph_payload?(graph_config, &1))
+  end
+
+  defp status_dot_classes(status, is_verified, error_message) do
+    base = "inline-flex h-2.5 w-2.5 rounded-full"
+
+    tone =
+      cond do
+        not is_nil(error_message) or status == :error -> "bg-rose-500"
+        is_verified -> "bg-emerald-500"
+        status in [:computing, :verifying, :rendering] -> "animate-pulse bg-amber-400"
+        true -> "bg-stone-300"
+      end
+
+    [base, tone]
+  end
 end

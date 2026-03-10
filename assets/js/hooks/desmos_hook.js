@@ -7,7 +7,7 @@ export const DesmosHook = {
     loadScriptOnce("desmos", this.scriptUrl())
       .then(() => this.renderGraph(this.readGraph()))
       .catch(() => {
-        this.el.innerHTML = "<div class=\"flex h-full items-center justify-center text-sm text-stone-500\">Desmos failed to load.</div>"
+        this.renderShell("bg-stone-100")
       })
   },
 
@@ -52,7 +52,7 @@ export const DesmosHook = {
     const calculator = this.initCalculator()
 
     if (!calculator) {
-      this.el.innerHTML = "<div class=\"flex h-full items-center justify-center text-sm text-stone-500\">Desmos is loading...</div>"
+      this.renderShell("animate-pulse bg-stone-100")
       return
     }
 
@@ -82,5 +82,9 @@ export const DesmosHook = {
     })
 
     this.el.dataset.hasExpressions = "true"
+  },
+
+  renderShell(tone) {
+    this.el.innerHTML = `<div class="h-full w-full ${tone}"></div>`
   },
 }

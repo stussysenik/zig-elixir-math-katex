@@ -3,38 +3,53 @@ defmodule MathVizWeb.MathOrchestratorLiveTest do
 
   import Phoenix.LiveViewTest
 
-  test "renders the verified-first shell", %{conn: conn} do
-    {:ok, _view, html} = live(conn, ~p"/")
+  test "renders the minimal shell with only nav and command bar", %{conn: conn} do
+    {:ok, view, html} = live(conn, ~p"/")
 
-    assert html =~ "Verified-first mathematics over LiveView"
-    assert html =~ "One prompt, one formal gate, three synchronized layers."
+    assert html =~ "MathViz"
+    assert has_element?(view, "#solve-form")
+    assert has_element?(view, "[data-testid='query-input']")
+    refute html =~ "One prompt, one formal gate"
+    refute has_element?(view, "#katex-output")
+    refute has_element?(view, "[data-testid='proof-state']")
+    refute has_element?(view, "#desmos-surface")
+    refute has_element?(view, "#geogebra-surface")
   end
 
-  test "submitting a prompt updates the pipeline result", %{conn: conn} do
+  test "submitting a prompt reveals the verified output and default graph tab", %{conn: conn} do
     {:ok, view, _html} = live(conn, ~p"/")
 
-    html =
+    _html =
       view
       |> element("#solve-form")
       |> render_submit(%{"prompt" => %{"input_query" => "Graph the derivative of x^2"}})
 
-    assert html =~ "Computing"
-
     rendered = wait_for_render(view, "Proof complete")
-    assert rendered =~ "Proof complete"
-    assert rendered =~ "2*x"
     assert rendered =~ "Graph the derivative of x^2"
+    assert rendered =~ "2*x"
+    assert has_element?(view, "#katex-output")
+    assert has_element?(view, "[data-testid='proof-state']")
+    assert has_element?(view, "#desmos-surface")
+    refute has_element?(view, "#geogebra-surface")
   end
 
-  test "desmos layer can be toggled off", %{conn: conn} do
+  test "graph tabs switch the rendered engine surface", %{conn: conn} do
     {:ok, view, _html} = live(conn, ~p"/")
 
+    view
+    |> element("#solve-form")
+    |> render_submit(%{"prompt" => %{"input_query" => "Graph the derivative of x^2"}})
+
+    _rendered = wait_for_render(view, "Proof complete")
+
     assert has_element?(view, "#desmos-surface")
+    refute has_element?(view, "#geogebra-surface")
 
     view
-    |> element("[data-testid='toggle-desmos']")
+    |> element("[data-testid='graph-tab-geogebra']")
     |> render_click()
 
+    assert has_element?(view, "#geogebra-surface")
     refute has_element?(view, "#desmos-surface")
   end
 
